@@ -17,7 +17,7 @@ func main() {
 		panic(err)
 	}
 
-	matchHdl := match.New(store)
+	matchHdl := match.NewHandler(store)
 
 	router := gin.Default()
 	router.POST("/match", matchHdl.AddMatch)

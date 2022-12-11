@@ -3,16 +3,24 @@ package mongodb
 import (
 	"context"
 	"fmt"
-
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
 	"github.com/fdp7/beachvolleyapp-api/store"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 type mongoStore struct {
 	client *mongo.Client
+}
+
+func New(ctx context.Context, connectionURI string) (store.Store, error) {
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI(connectionURI))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create mongoDB client: %w", err)
+	}
+
+	return &mongoStore{client: client}, nil
 }
 
 func (s *mongoStore) AddMatch(ctx context.Context, m *store.Match) error {
@@ -27,13 +35,4 @@ func (s *mongoStore) AddMatch(ctx context.Context, m *store.Match) error {
 	}
 
 	return nil
-}
-
-func New(ctx context.Context, connectionURI string) (store.Store, error) {
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(connectionURI))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create mongoDB client: %w", err)
-	}
-
-	return &mongoStore{client: client}, nil
 }
