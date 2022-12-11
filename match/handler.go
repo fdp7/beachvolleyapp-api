@@ -8,21 +8,20 @@ import (
 	"github.com/fdp7/beachvolleyapp-api/store"
 )
 
-type Handler struct {
-	store store.Store
-}
 
-func NewHandler(store store.Store) Handler {
-	return Handler{store: store}
-}
+func AddMatch(ctx *gin.Context) {
+	if store.DB == nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "store is not initialized",
+		})
 
-func (h *Handler) AddMatch(ctx *gin.Context) {
-	err := h.store.AddMatch(ctx, &store.Match{})
+		return
+	}
 
+	err := store.DB.AddMatch(ctx, &store.Match{})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "failed to add match",
-			"error": err.Error(),
 		})
 	}
 

@@ -1,11 +1,10 @@
-package mongodb
+package store
 
 import (
 	"context"
 	"fmt"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"github.com/fdp7/beachvolleyapp-api/store"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -14,7 +13,7 @@ type mongoStore struct {
 	client *mongo.Client
 }
 
-func New(ctx context.Context, connectionURI string) (store.Store, error) {
+func NewMongoDBStore(ctx context.Context, connectionURI string) (Store, error) {
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(connectionURI))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create mongoDB client: %w", err)
@@ -23,7 +22,7 @@ func New(ctx context.Context, connectionURI string) (store.Store, error) {
 	return &mongoStore{client: client}, nil
 }
 
-func (s *mongoStore) AddMatch(ctx context.Context, m *store.Match) error {
+func (s *mongoStore) AddMatch(ctx context.Context, m *Match) error {
 	collection := s.client.Database("beachvolley").Collection("match")
 
 	_, err := collection.InsertOne(ctx, bson.M{
