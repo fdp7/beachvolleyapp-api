@@ -3,10 +3,10 @@ package store
 import (
 	"context"
 	"fmt"
-	"go.mongodb.org/mongo-driver/mongo/options"
-
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"time"
 )
 
 type mongoStore struct {
@@ -26,8 +26,13 @@ func (s *mongoStore) AddMatch(ctx context.Context, m *Match) error {
 	collection := s.client.Database("beachvolley").Collection("match")
 
 	_, err := collection.InsertOne(ctx, bson.M{
-		"hello": "world",
-		"pippo": "world",
+		"match": Match{
+			TeamA:  []string{"pippo", "pluto"},
+			TeamB:  []string{"topolino", "paperino"},
+			ScoreA: 21,
+			ScoreB: 15,
+			Date:   time.Now(),
+		},
 	})
 	if err != nil {
 		return fmt.Errorf("failed to add a new match: %w", err)

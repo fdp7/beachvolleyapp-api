@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/spf13/viper"
+	"time"
 )
 
 type Store interface {
@@ -21,7 +23,8 @@ const (
 func InitializeDB(ctx context.Context, t StoreType) error {
 	switch t {
 	case MongoDB:
-		db, err := NewMongoDBStore(ctx, "mongodb+srv://federico:kObR1eLZfNg0WeN9@federicocluster.2bvfp2w.mongodb.net/test")
+		connectionUri := viper.Get("CONNECTIONSTRING_MONGODB").(string)
+		db, err := NewMongoDBStore(ctx, connectionUri)
 		if err != nil {
 			return fmt.Errorf("failed to initialize mongoDB: %w", err)
 		}
@@ -34,4 +37,10 @@ func InitializeDB(ctx context.Context, t StoreType) error {
 	return nil
 }
 
-type Match struct{}
+type Match struct {
+	TeamA  []string
+	TeamB  []string
+	ScoreA int
+	ScoreB int
+	Date   time.Time
+}
