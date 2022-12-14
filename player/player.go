@@ -1,8 +1,8 @@
 package player
 
-type Player struct {
+/*type Player struct {
 	Name         string
 	HashPassword string
 	MatchCount   int
 	WinCount     int
-}
+}*/

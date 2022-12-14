@@ -10,6 +10,7 @@ import (
 
 type Store interface {
 	AddMatch(context.Context, *Match) error
+	GetMatches(context.Context) error
 }
 
 var DB Store
