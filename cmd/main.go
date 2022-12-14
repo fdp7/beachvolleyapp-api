@@ -26,6 +26,7 @@ func main() {
 
 	router := gin.Default()
 	router.POST("/match", match.AddMatch)
+	router.GET("/matches", match.GetMatches)
 
 	router.Run()
 }
