@@ -10,7 +10,7 @@ import (
 
 type Store interface {
 	AddMatch(context.Context, *Match) error
-	GetMatches(context.Context) error
+	GetMatches(context.Context) ([]byte, error)
 }
 
 var DB Store
@@ -39,9 +39,9 @@ func InitializeDB(ctx context.Context, t StoreType) error {
 }
 
 type Match struct {
-	TeamA  []string
-	TeamB  []string
-	ScoreA int
-	ScoreB int
-	Date   time.Time
+	TeamA  []string  `json:"team_a" bson:"team_a"`
+	TeamB  []string  `json:"team_b" bson:"team_b"`
+	ScoreA int       `json:"score_a" bson:"score_a"`
+	ScoreB int       `json:"score_b" bson:"score_b"`
+	Date   time.Time `json:"date" bson:"date"`
 }

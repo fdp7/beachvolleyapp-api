@@ -4,6 +4,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"net/http"
 
+	"encoding/json"
+
 	"github.com/fdp7/beachvolleyapp-api/store"
 )
 
@@ -29,7 +31,6 @@ func AddMatch(ctx *gin.Context) {
 			"message": "failed to add match",
 		})
 	}
-
 	ctx.JSON(http.StatusOK, gin.H{})
 }
 
@@ -42,14 +43,20 @@ func GetMatches(ctx *gin.Context) {
 		return
 	}
 
-	err := store.DB.GetMatches(ctx)
+	matches, err := store.DB.GetMatches(ctx)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "failed to retrieve matches",
 		})
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"data": nil})
+	var result []Match
+	if err := json.Unmarshal(matches, &result); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "failed to unmarshal matches",
+		})
+	}
+	ctx.JSON(http.StatusOK, gin.H{"matches": result})
 }
 
 func matchToStoreMatch(m *Match) *store.Match {
