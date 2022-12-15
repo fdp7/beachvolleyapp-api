@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -43,19 +44,26 @@ func (s *mongoStore) AddMatch(ctx context.Context, m *Match) error {
 	return nil
 }
 
-func (s *mongoStore) GetMatches(ctx context.Context) ([]byte, error) {
+func (s *mongoStore) GetMatches(ctx context.Context, player string) ([]byte, error) {
 	dbName := viper.Get("DATABASE_NAME").(string)
 	collectionName := viper.Get("MATCH_COLLECTION_NAME").(string)
 	collection := s.client.Database(dbName).Collection(collectionName)
 
-	// get all, ordered by descending date, limit number of samples
-	filter := bson.D{}
+	// get all, ordered by descending date, limit number of samples, with query filters
+	filter := bson.M{}
+	if player != "" {
+		filterTeamA := bson.M{"team_a": player}
+		filterTeamB := bson.M{"team_b": player}
+		filter = bson.M{"$or": []bson.M{filterTeamA, filterTeamB}}
+
+	}
+
 	orderDate := bson.D{{"date", -1}}
 	options := options.Find().SetSort(orderDate).SetLimit(10)
 
 	results, err := collection.Find(ctx, filter, options)
 	if err != nil {
-		fmt.Errorf("failed to retrieve all matches: %w", err)
+		return nil, fmt.Errorf("failed to retrieve all matches: %w", err)
 	}
 
 	var matches []Match
@@ -63,9 +71,14 @@ func (s *mongoStore) GetMatches(ctx context.Context) ([]byte, error) {
 	for results.Next(ctx) {
 		match := Match{}
 		if err := results.Decode(&match); err != nil {
-			fmt.Errorf("failed to retrieve all matches: %w", err)
+			return nil, fmt.Errorf("failed to retrieve all matches: %w", err)
 		}
 		matches = append(matches, match)
 	}
+
+	if len(matches) == 0 {
+		return nil, ErrNoMatchFound
+	}
+
 	return json.Marshal(matches)
 }

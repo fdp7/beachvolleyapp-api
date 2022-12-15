@@ -4,16 +4,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spf13/viper"
 	"time"
+
+	"github.com/spf13/viper"
 )
 
 type Store interface {
 	AddMatch(context.Context, *Match) error
-	GetMatches(context.Context) ([]byte, error)
+	GetMatches(context.Context, string) ([]byte, error)
 }
 
 var DB Store
+
+var (
+	ErrNoMatchFound = errors.New("no match found")
+)
 
 type StoreType int
 
