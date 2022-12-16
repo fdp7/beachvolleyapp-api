@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/fdp7/beachvolleyapp-api/match"
+	"github.com/fdp7/beachvolleyapp-api/player"
 	"github.com/fdp7/beachvolleyapp-api/store"
 )
 
@@ -25,8 +26,11 @@ func main() {
 	}
 
 	router := gin.Default()
-	router.POST("/match", match.AddMatch)
 	router.GET("/matches", match.GetMatches)
+	router.POST("/match", match.AddMatch)
+
+	router.GET("/player/:name", player.GetPlayer)
+	router.POST("/player/signup", player.AddPlayer)
 
 	router.Run()
 }

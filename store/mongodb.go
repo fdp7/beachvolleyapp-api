@@ -29,7 +29,6 @@ func (s *mongoStore) AddMatch(ctx context.Context, m *Match) error {
 	collectionName := viper.Get("MATCH_COLLECTION_NAME").(string)
 	collection := s.client.Database(dbName).Collection(collectionName)
 
-	// add
 	_, err := collection.InsertOne(ctx, bson.M{
 		"team_a":  m.TeamA,
 		"team_b":  m.TeamB,
@@ -63,7 +62,7 @@ func (s *mongoStore) GetMatches(ctx context.Context, player string) ([]byte, err
 
 	results, err := collection.Find(ctx, filter, options)
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve all matches: %w", err)
+		return nil, fmt.Errorf("failed to retrieve matches: %w", err)
 	}
 
 	var matches []Match
@@ -71,7 +70,7 @@ func (s *mongoStore) GetMatches(ctx context.Context, player string) ([]byte, err
 	for results.Next(ctx) {
 		match := Match{}
 		if err := results.Decode(&match); err != nil {
-			return nil, fmt.Errorf("failed to retrieve all matches: %w", err)
+			return nil, fmt.Errorf("failed to retrieve matches: %w", err)
 		}
 		matches = append(matches, match)
 	}
@@ -81,4 +80,43 @@ func (s *mongoStore) GetMatches(ctx context.Context, player string) ([]byte, err
 	}
 
 	return json.Marshal(matches)
+}
+
+func (s *mongoStore) AddPlayer(ctx context.Context, p *Player) error {
+	dbName := viper.Get("DATABASE_NAME").(string)
+	collectionName := viper.Get("PLAYER_COLLECTION_NAME").(string)
+	collection := s.client.Database(dbName).Collection(collectionName)
+
+	_, err := collection.InsertOne(ctx, bson.M{
+		"_id":         p.Name,
+		"name":        p.Name,
+		"match_count": p.MatchCount,
+		"win_count":   p.WinCount,
+	})
+	if err != nil {
+		return ErrPlayerDuplicated
+	}
+	return nil
+
+}
+
+func (s *mongoStore) GetPlayer(ctx context.Context, playerName string) ([]byte, error) {
+	dbName := viper.Get("DATABASE_NAME").(string)
+	collectionName := viper.Get("PLAYER_COLLECTION_NAME").(string)
+	collection := s.client.Database(dbName).Collection(collectionName)
+
+	// get the player specified by playerName
+	filter := bson.M{"name": playerName}
+
+	result := collection.FindOne(ctx, filter)
+	if result == nil {
+		return nil, fmt.Errorf("failed to retrieve player: %w", result)
+	}
+
+	player := &Player{}
+	if err := result.Decode(player); err != nil {
+		return nil, ErrNoPlayerFound
+	}
+
+	return json.Marshal(player)
 }

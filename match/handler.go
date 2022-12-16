@@ -36,7 +36,7 @@ func AddMatch(ctx *gin.Context) {
 			"message": "failed to add match",
 		})
 	}
-	ctx.JSON(http.StatusOK, gin.H{})
+	ctx.JSON(http.StatusCreated, gin.H{})
 }
 
 func GetMatches(ctx *gin.Context) {
@@ -50,7 +50,7 @@ func GetMatches(ctx *gin.Context) {
 
 	player := ctx.Request.URL.Query().Get(playerQueryParam)
 
-	matches, err := store.DB.GetMatches(ctx, player)
+	result, err := store.DB.GetMatches(ctx, player)
 	if errors.Is(err, store.ErrNoMatchFound) {
 		ctx.JSON(http.StatusNotFound, gin.H{
 			"message": "no match found",
@@ -66,16 +66,16 @@ func GetMatches(ctx *gin.Context) {
 		return
 	}
 
-	result := &[]Match{}
+	matches := &[]Match{}
 
-	if err := json.Unmarshal(matches, result); err != nil {
+	if err := json.Unmarshal(result, matches); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "failed to unmarshal matches",
 		})
 
 		return
 	}
-	ctx.JSON(http.StatusOK, gin.H{"matches": result})
+	ctx.JSON(http.StatusOK, gin.H{"matches": matches})
 }
 
 func matchToStoreMatch(m *Match) *store.Match {
