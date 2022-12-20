@@ -84,6 +84,36 @@ func GetPlayer(ctx *gin.Context) {
 
 }
 
+func GetRanking(ctx *gin.Context) {
+	if store.DB == nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "store is not initialized",
+		})
+
+		return
+	}
+
+	result, err := store.DB.GetRanking(ctx)
+	if errors.Is(err, store.ErrNoPlayerFound) {
+		ctx.JSON(http.StatusNotFound, gin.H{
+			"message": "failed to retrieve players",
+		})
+
+		return
+	}
+
+	players := &[]Player{}
+
+	if err := json.Unmarshal(result, players); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "failed to unmarshal players",
+		})
+
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"ranking": players})
+}
+
 func playerToStorePlayer(p *Player) *store.Player {
 	return &store.Player{
 		ID:         p.ID,

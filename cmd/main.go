@@ -26,10 +26,12 @@ func main() {
 	}
 
 	router := gin.Default()
+
 	router.GET("/matches", match.GetMatches)
 	router.POST("/match", match.AddMatch)
 
 	router.GET("/player/:name", player.GetPlayer)
+	router.GET("/ranking", player.GetRanking)
 	router.POST("/player/signup", player.AddPlayer)
 
 	router.Run()

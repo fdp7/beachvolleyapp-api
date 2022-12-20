@@ -15,6 +15,7 @@ type Store interface {
 
 	AddPlayer(context.Context, *Player) error
 	GetPlayer(context.Context, string) ([]byte, error)
+	GetRanking(context.Context) ([]byte, error)
 }
 
 var DB Store

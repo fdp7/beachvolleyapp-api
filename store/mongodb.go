@@ -12,7 +12,10 @@ import (
 )
 
 type mongoStore struct {
-	client *mongo.Client
+	client           *mongo.Client
+	dbName           string
+	matchCollection  string
+	playerCollection string
 }
 
 func NewMongoDBStore(ctx context.Context, connectionURI string) (Store, error) {
@@ -20,14 +23,17 @@ func NewMongoDBStore(ctx context.Context, connectionURI string) (Store, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create mongoDB client: %w", err)
 	}
-
-	return &mongoStore{client: client}, nil
+	ms := mongoStore{
+		client:           client,
+		dbName:           viper.Get("DATABASE_NAME").(string),
+		matchCollection:  viper.Get("MATCH_COLLECTION_NAME").(string),
+		playerCollection: viper.Get("PLAYER_COLLECTION_NAME").(string),
+	}
+	return &ms, nil
 }
 
 func (s *mongoStore) AddMatch(ctx context.Context, m *Match) error {
-	dbName := viper.Get("DATABASE_NAME").(string)
-	collectionName := viper.Get("MATCH_COLLECTION_NAME").(string)
-	collection := s.client.Database(dbName).Collection(collectionName)
+	collection := s.client.Database(s.dbName).Collection(s.matchCollection)
 
 	_, err := collection.InsertOne(ctx, bson.M{
 		"team_a":  m.TeamA,
@@ -44,9 +50,7 @@ func (s *mongoStore) AddMatch(ctx context.Context, m *Match) error {
 }
 
 func (s *mongoStore) GetMatches(ctx context.Context, player string) ([]byte, error) {
-	dbName := viper.Get("DATABASE_NAME").(string)
-	collectionName := viper.Get("MATCH_COLLECTION_NAME").(string)
-	collection := s.client.Database(dbName).Collection(collectionName)
+	collection := s.client.Database(s.dbName).Collection(s.matchCollection)
 
 	// get all, ordered by descending date, limit number of samples, with query filters
 	filter := bson.M{}
@@ -83,9 +87,7 @@ func (s *mongoStore) GetMatches(ctx context.Context, player string) ([]byte, err
 }
 
 func (s *mongoStore) AddPlayer(ctx context.Context, p *Player) error {
-	dbName := viper.Get("DATABASE_NAME").(string)
-	collectionName := viper.Get("PLAYER_COLLECTION_NAME").(string)
-	collection := s.client.Database(dbName).Collection(collectionName)
+	collection := s.client.Database(s.dbName).Collection(s.playerCollection)
 
 	_, err := collection.InsertOne(ctx, bson.M{
 		"_id":         p.Name,
@@ -93,17 +95,18 @@ func (s *mongoStore) AddPlayer(ctx context.Context, p *Player) error {
 		"match_count": p.MatchCount,
 		"win_count":   p.WinCount,
 	})
-	if err != nil {
+	if mongo.IsDuplicateKeyError(err) {
 		return ErrPlayerDuplicated
+	}
+	if err != nil {
+		return fmt.Errorf("failed to add player to db: %w", err)
 	}
 	return nil
 
 }
 
 func (s *mongoStore) GetPlayer(ctx context.Context, playerName string) ([]byte, error) {
-	dbName := viper.Get("DATABASE_NAME").(string)
-	collectionName := viper.Get("PLAYER_COLLECTION_NAME").(string)
-	collection := s.client.Database(dbName).Collection(collectionName)
+	collection := s.client.Database(s.dbName).Collection(s.playerCollection)
 
 	// get the player specified by playerName
 	filter := bson.M{"name": playerName}
@@ -119,4 +122,35 @@ func (s *mongoStore) GetPlayer(ctx context.Context, playerName string) ([]byte, 
 	}
 
 	return json.Marshal(player)
+}
+
+func (s *mongoStore) GetRanking(ctx context.Context) ([]byte, error) {
+	collection := s.client.Database(s.dbName).Collection(s.playerCollection)
+
+	// get all players, ordered by max(win_count) and min(match_count) and alphabetical(name)
+	filter := bson.M{}
+
+	order := bson.D{{"win_count", -1}, {"match_count", 1}, {"name", 1}}
+	options := options.Find().SetSort(order)
+
+	results, err := collection.Find(ctx, filter, options)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve ranking of players: %w", err)
+	}
+
+	var players []Player
+
+	for results.Next(ctx) {
+		player := Player{}
+		if err := results.Decode(&player); err != nil {
+			return nil, fmt.Errorf("failed to retrieve player: %w", err)
+		}
+		players = append(players, player)
+	}
+
+	if len(players) == 0 {
+		return nil, ErrNoPlayerFound
+	}
+
+	return json.Marshal(players)
 }
