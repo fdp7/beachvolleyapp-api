@@ -29,6 +29,7 @@ func main() {
 
 	router.GET("/matches", match.GetMatches)
 	router.POST("/match", match.AddMatch)
+	router.DELETE("/match", match.DeleteMatch)
 
 	router.GET("/player/:name", player.GetPlayer)
 	router.GET("/ranking", player.GetRanking)

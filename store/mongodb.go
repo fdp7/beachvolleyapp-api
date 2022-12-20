@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/spf13/viper"
 	"go.mongodb.org/mongo-driver/bson"
@@ -84,6 +85,24 @@ func (s *mongoStore) GetMatches(ctx context.Context, player string) ([]byte, err
 	}
 
 	return json.Marshal(matches)
+}
+
+func (s *mongoStore) DeleteMatch(ctx context.Context, matchDate time.Time) error {
+	collection := s.client.Database(s.dbName).Collection(s.matchCollection)
+
+	filter := bson.M{"date": matchDate}
+	deletedCount, err := collection.DeleteOne(ctx, filter)
+	/*if deletedCount.DeletedCount == 0 {
+		return fmt.Errorf("match found but failed to delete")
+	}*/
+	if deletedCount.DeletedCount == 0 {
+		return ErrNoMatchFound
+	}
+	if err != nil {
+		return fmt.Errorf("failed to delete match %w, err")
+	}
+
+	return nil
 }
 
 func (s *mongoStore) AddPlayer(ctx context.Context, p *Player) error {

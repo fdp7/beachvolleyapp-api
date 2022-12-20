@@ -12,6 +12,7 @@ import (
 type Store interface {
 	AddMatch(context.Context, *Match) error
 	GetMatches(context.Context, string) ([]byte, error)
+	DeleteMatch(context.Context, time.Time) error
 
 	AddPlayer(context.Context, *Player) error
 	GetPlayer(context.Context, string) ([]byte, error)

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -11,7 +12,8 @@ import (
 )
 
 const (
-	playerQueryParam = "player"
+	playerQueryParam    = "player"
+	matchDateQueryParam = "date"
 )
 
 func AddMatch(ctx *gin.Context) {
@@ -76,6 +78,40 @@ func GetMatches(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{"matches": matches})
+}
+
+func DeleteMatch(ctx *gin.Context) {
+	if store.DB == nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "store is not initialized",
+		})
+
+		return
+	}
+
+	matchDate := ctx.Request.URL.Query().Get(matchDateQueryParam)
+	FormattedMatchDate, err := time.Parse(time.RFC3339, matchDate)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "failed to format match date",
+		})
+	}
+
+	err = store.DB.DeleteMatch(ctx, FormattedMatchDate)
+	if errors.Is(err, store.ErrNoMatchFound) {
+		ctx.JSON(http.StatusNoContent, gin.H{
+			"message": "no match found",
+		})
+	}
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "failed to delete match",
+		})
+
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{})
 }
 
 func matchToStoreMatch(m *Match) *store.Match {
