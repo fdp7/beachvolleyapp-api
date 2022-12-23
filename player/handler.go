@@ -3,6 +3,7 @@ package player
 import (
 	"encoding/json"
 	"errors"
+	"golang.org/x/crypto/bcrypt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -10,12 +11,27 @@ import (
 	"github.com/fdp7/beachvolleyapp-api/store"
 )
 
-func AddPlayer(ctx *gin.Context) {
+func (player *Player) HashPassword(password string) error {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 1)
+	if err != nil {
+		return nil
+	}
+	player.Password = string(bytes)
+	return nil
+}
+
+func (player *Player) CheckPassword(providedPassword string) error {
+	if err := bcrypt.CompareHashAndPassword([]byte(player.Password), []byte(providedPassword)); err != nil {
+		return err
+	}
+	return nil
+}
+
+func RegisterPlayer(ctx *gin.Context) {
 	if store.DB == nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "store is not initialized",
 		})
-
 		return
 	}
 
@@ -24,14 +40,19 @@ func AddPlayer(ctx *gin.Context) {
 		return
 	}
 
-	storePlayer := playerToStorePlayer(player)
+	if err := player.HashPassword(player.Password); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "failed to encrypt password",
+		})
+		return
+	}
 
+	storePlayer := playerToStorePlayer(player)
 	err := store.DB.AddPlayer(ctx, storePlayer)
 	if errors.Is(err, store.ErrPlayerDuplicated) {
 		ctx.JSON(http.StatusForbidden, gin.H{
 			"message": "player already exists",
 		})
-
 		return
 	}
 	if err != nil {
@@ -51,7 +72,6 @@ func GetPlayer(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "store is not initialized",
 		})
-
 		return
 	}
 
@@ -60,14 +80,12 @@ func GetPlayer(ctx *gin.Context) {
 		ctx.JSON(http.StatusNotFound, gin.H{
 			"message": "no player found",
 		})
-
 		return
 	}
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "can't find player",
 		})
-
 		return
 	}
 
@@ -77,11 +95,9 @@ func GetPlayer(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "failed to unmarshal player",
 		})
-
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{"player": player})
-
 }
 
 func GetRanking(ctx *gin.Context) {
@@ -118,6 +134,7 @@ func playerToStorePlayer(p *Player) *store.Player {
 	return &store.Player{
 		ID:         p.ID,
 		Name:       p.Name,
+		Password:   p.Password,
 		MatchCount: p.MatchCount,
 		WinCount:   p.WinCount,
 	}

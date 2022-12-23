@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/fdp7/beachvolleyapp-api/auth"
 	"log"
 
 	"github.com/gin-gonic/gin"
@@ -33,7 +34,13 @@ func main() {
 
 	router.GET("/player/:name", player.GetPlayer)
 	router.GET("/ranking", player.GetRanking)
-	router.POST("/player/signup", player.AddPlayer)
+	router.POST("/player/signup", player.RegisterPlayer)
+
+	router.POST("/player/signin", auth.GenerateToken)
+	secured := router.Use(auth.Auth())
+	{
+		secured.GET("/ping", player.Ping)
+	}
 
 	router.Run()
 }

@@ -111,6 +111,7 @@ func (s *mongoStore) AddPlayer(ctx context.Context, p *Player) error {
 	_, err := collection.InsertOne(ctx, bson.M{
 		"_id":         p.Name,
 		"name":        p.Name,
+		"password":    p.Password,
 		"match_count": p.MatchCount,
 		"win_count":   p.WinCount,
 	})
@@ -121,7 +122,6 @@ func (s *mongoStore) AddPlayer(ctx context.Context, p *Player) error {
 		return fmt.Errorf("failed to add player to db: %w", err)
 	}
 	return nil
-
 }
 
 func (s *mongoStore) GetPlayer(ctx context.Context, playerName string) ([]byte, error) {
