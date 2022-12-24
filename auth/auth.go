@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-var jwtKey = []byte("nonsocosatuasia")
+var jwtKey = []byte("key")
 
 type JWTClaim struct {
 	Name string `json:"name" bson:"name"`
@@ -116,4 +116,26 @@ func GenerateToken(ctx *gin.Context) {
 		return
 	}
 	ctx.JSON(http.StatusOK, gin.H{"token": tokenString})
+}
+
+func Auth() gin.HandlerFunc {
+
+	return func(ctx *gin.Context) {
+		tokenString := ctx.GetHeader("Authorization")
+		if tokenString == "" {
+			ctx.JSON(401, gin.H{
+				"message": "request does not contain an access token",
+			})
+			return
+		}
+
+		err := ValidateToken(tokenString)
+		if err != nil {
+			ctx.JSON(401, gin.H{
+				"message": "token validation failed",
+			})
+			return
+		}
+		ctx.Next()
+	}
 }

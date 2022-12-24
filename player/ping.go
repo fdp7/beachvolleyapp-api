@@ -6,5 +6,7 @@ import (
 )
 
 func Ping(context *gin.Context) {
-	context.JSON(http.StatusOK, gin.H{"message": "pong"})
+	context.JSON(http.StatusOK, gin.H{
+		"message": "Pong! Endpoint is secure!",
+	})
 }
