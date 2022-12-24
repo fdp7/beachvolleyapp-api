@@ -3,18 +3,20 @@ package auth
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gin-gonic/gin"
+	"github.com/spf13/viper"
 
 	"github.com/fdp7/beachvolleyapp-api/player"
 	"github.com/fdp7/beachvolleyapp-api/store"
 )
 
-var jwtKey = []byte("key")
+var jwtKey []byte
 
 type JWTClaim struct {
 	Name string `json:"name"`
@@ -26,7 +28,12 @@ type TokenRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
-func GenerateJWT(name string) (tokenString string, err error) {
+func init() {
+	jwtKeyString := viper.GetString("JWT_KEY")
+	jwtKey = []byte(jwtKeyString)
+}
+
+func GenerateJWT(name string) (string, error) {
 	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &JWTClaim{
 		Name: name,
@@ -35,32 +42,38 @@ func GenerateJWT(name string) (tokenString string, err error) {
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	tokenString, err = token.SignedString(jwtKey)
-	return
+	tokenString, err := token.SignedString(jwtKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to sign token: %w", err)
+	}
+
+	return tokenString, nil
 }
 
-func ValidateToken(signedToken string) (err error) {
-	sToken := strings.Split(signedToken, "Bearer ")
+func ValidateToken(signedToken string) error {
+	sToken := strings.TrimPrefix(signedToken, "Bearer ")
+
 	token, err := jwt.ParseWithClaims(
-		sToken[1],
+		sToken,
 		&JWTClaim{},
 		func(token *jwt.Token) (interface{}, error) {
-			return []byte(jwtKey), nil
+			return jwtKey, nil
 		},
 	)
 	if err != nil {
-		return
+		return fmt.Errorf("failed to parse token: %w", err)
 	}
+
 	claims, ok := token.Claims.(*JWTClaim)
 	if !ok {
-		err = errors.New("couldn't parse claims")
-		return
+		return fmt.Errorf("couldn't parse claims: %w", err)
 	}
+
 	if claims.ExpiresAt < time.Now().Local().Unix() {
-		err = errors.New("token expired")
-		return
+		return fmt.Errorf("token expired: %w", err)
 	}
-	return
+
+	return nil
 }
 
 func GenerateToken(ctx *gin.Context) {
@@ -94,22 +107,22 @@ func GenerateToken(ctx *gin.Context) {
 		return
 	}
 
-	player := &player.Player{}
-	if err := json.Unmarshal(record, player); err != nil {
+	user := &player.Player{}
+	if err := json.Unmarshal(record, user); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "failed to unmarshal player",
 		})
 		return
 	}
 
-	if credentialError := player.CheckPassword(request.Password); credentialError != nil {
+	if credentialError := player.CheckPassword(user, request.Password); credentialError != nil {
 		ctx.JSON(http.StatusUnauthorized, gin.H{
 			"message": "invalid credential",
 		})
 		return
 	}
 
-	tokenString, err := GenerateJWT(player.Name)
+	tokenString, err := GenerateJWT(user.Name)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "failed to generate token",

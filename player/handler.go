@@ -3,16 +3,17 @@ package player
 import (
 	"encoding/json"
 	"errors"
-	"golang.org/x/crypto/bcrypt"
 	"net/http"
+
+	"golang.org/x/crypto/bcrypt"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/fdp7/beachvolleyapp-api/store"
 )
 
-func (player *Player) HashPassword(password string) error {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 1)
+func HashPassword(player *Player) error {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(player.Password), 1)
 	if err != nil {
 		return nil
 	}
@@ -20,7 +21,7 @@ func (player *Player) HashPassword(password string) error {
 	return nil
 }
 
-func (player *Player) CheckPassword(providedPassword string) error {
+func CheckPassword(player *Player, providedPassword string) error {
 	if err := bcrypt.CompareHashAndPassword([]byte(player.Password), []byte(providedPassword)); err != nil {
 		return err
 	}
@@ -40,7 +41,7 @@ func RegisterPlayer(ctx *gin.Context) {
 		return
 	}
 
-	if err := player.HashPassword(player.Password); err != nil {
+	if err := HashPassword(player); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "failed to encrypt password",
 		})
