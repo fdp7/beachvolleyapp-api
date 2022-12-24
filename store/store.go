@@ -4,16 +4,28 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spf13/viper"
 	"time"
+
+	"github.com/spf13/viper"
 )
 
 type Store interface {
 	AddMatch(context.Context, *Match) error
-	GetMatches(context.Context) error
+	GetMatches(context.Context, string) ([]byte, error)
+	DeleteMatch(context.Context, time.Time) error
+
+	AddPlayer(context.Context, *Player) error
+	GetPlayer(context.Context, string) ([]byte, error)
+	GetRanking(context.Context) ([]byte, error)
 }
 
 var DB Store
+
+var (
+	ErrNoMatchFound     = errors.New("no match found")
+	ErrPlayerDuplicated = errors.New("player already registered")
+	ErrNoPlayerFound    = errors.New("no player found")
+)
 
 type StoreType int
 
@@ -39,9 +51,17 @@ func InitializeDB(ctx context.Context, t StoreType) error {
 }
 
 type Match struct {
-	TeamA  []string
-	TeamB  []string
-	ScoreA int
-	ScoreB int
-	Date   time.Time
+	TeamA  []string  `json:"team_a" bson:"team_a"`
+	TeamB  []string  `json:"team_b" bson:"team_b"`
+	ScoreA int       `json:"score_a" bson:"score_a"`
+	ScoreB int       `json:"score_b" bson:"score_b"`
+	Date   time.Time `json:"date" bson:"date"`
+}
+
+type Player struct {
+	ID         string `json:"_id" bson:"_id"`
+	Name       string `json:"name" bson:"name"`
+	Password   string `json:"password" bson:"password"`
+	MatchCount int    `json:"match_count" bson:"match_count"`
+	WinCount   int    `json:"win_count" bson:"win_count"`
 }

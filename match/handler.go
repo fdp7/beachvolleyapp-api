@@ -1,10 +1,19 @@
 package match
 
 import (
-	"github.com/gin-gonic/gin"
+	"encoding/json"
+	"errors"
 	"net/http"
+	"time"
+
+	"github.com/gin-gonic/gin"
 
 	"github.com/fdp7/beachvolleyapp-api/store"
+)
+
+const (
+	playerQueryParam    = "player"
+	matchDateQueryParam = "date"
 )
 
 func AddMatch(ctx *gin.Context) {
@@ -29,8 +38,7 @@ func AddMatch(ctx *gin.Context) {
 			"message": "failed to add match",
 		})
 	}
-
-	ctx.JSON(http.StatusOK, gin.H{})
+	ctx.JSON(http.StatusCreated, gin.H{})
 }
 
 func GetMatches(ctx *gin.Context) {
@@ -42,14 +50,68 @@ func GetMatches(ctx *gin.Context) {
 		return
 	}
 
-	err := store.DB.GetMatches(ctx)
+	player := ctx.Request.URL.Query().Get(playerQueryParam)
+
+	result, err := store.DB.GetMatches(ctx, player)
+	if errors.Is(err, store.ErrNoMatchFound) {
+		ctx.JSON(http.StatusNotFound, gin.H{
+			"message": "no match found",
+		})
+
+		return
+	}
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "failed to retrieve matches",
 		})
+
+		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"data": nil})
+	matches := &[]Match{}
+
+	if err := json.Unmarshal(result, matches); err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "failed to unmarshal matches",
+		})
+
+		return
+	}
+	ctx.JSON(http.StatusOK, gin.H{"matches": matches})
+}
+
+func DeleteMatch(ctx *gin.Context) {
+	if store.DB == nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "store is not initialized",
+		})
+
+		return
+	}
+
+	matchDate := ctx.Request.URL.Query().Get(matchDateQueryParam)
+	FormattedMatchDate, err := time.Parse(time.RFC3339, matchDate)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "failed to format match date",
+		})
+	}
+
+	err = store.DB.DeleteMatch(ctx, FormattedMatchDate)
+	if errors.Is(err, store.ErrNoMatchFound) {
+		ctx.JSON(http.StatusNoContent, gin.H{
+			"message": "no match found",
+		})
+	}
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "failed to delete match",
+		})
+
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{})
 }
 
 func matchToStoreMatch(m *Match) *store.Match {
