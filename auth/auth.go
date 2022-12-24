@@ -3,29 +3,31 @@ package auth
 import (
 	"encoding/json"
 	"errors"
-	"github.com/dgrijalva/jwt-go"
-	"github.com/fdp7/beachvolleyapp-api/player"
-	"github.com/fdp7/beachvolleyapp-api/store"
-	"github.com/gin-gonic/gin"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/dgrijalva/jwt-go"
+	"github.com/gin-gonic/gin"
+
+	"github.com/fdp7/beachvolleyapp-api/player"
+	"github.com/fdp7/beachvolleyapp-api/store"
 )
 
 var jwtKey = []byte("key")
 
 type JWTClaim struct {
-	Name string `json:"name" bson:"name"`
+	Name string `json:"name"`
 	jwt.StandardClaims
 }
 
 type TokenRequest struct {
-	Name     string `json:"name" bson:"name"`
-	Password string `json:"password" bson:"password"`
+	Name     string `json:"name" binding:"required"`
+	Password string `json:"password" binding:"required"`
 }
 
 func GenerateJWT(name string) (tokenString string, err error) {
-	expirationTime := time.Now().Add(1 * time.Hour)
+	expirationTime := time.Now().Add(24 * time.Hour)
 	claims := &JWTClaim{
 		Name: name,
 		StandardClaims: jwt.StandardClaims{
@@ -62,12 +64,11 @@ func ValidateToken(signedToken string) (err error) {
 }
 
 func GenerateToken(ctx *gin.Context) {
-
 	var request TokenRequest
 
-	if err := ctx.BindJSON(&request); err != nil {
+	if err := ctx.ShouldBindJSON(&request); err != nil {
 		ctx.JSON(http.StatusBadRequest, gin.H{
-			"message": "failed to generate token",
+			"message": err.Error(),
 		})
 		return
 	}
@@ -119,23 +120,22 @@ func GenerateToken(ctx *gin.Context) {
 }
 
 func Auth() gin.HandlerFunc {
-
 	return func(ctx *gin.Context) {
 		tokenString := ctx.GetHeader("Authorization")
 		if tokenString == "" {
-			ctx.JSON(401, gin.H{
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"message": "request does not contain an access token",
 			})
 			return
 		}
 
-		err := ValidateToken(tokenString)
-		if err != nil {
-			ctx.JSON(401, gin.H{
+		if err := ValidateToken(tokenString); err != nil {
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"message": "token validation failed",
 			})
 			return
 		}
+
 		ctx.Next()
 	}
 }
