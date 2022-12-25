@@ -14,16 +14,16 @@ import (
 )
 
 func main() {
+	ctx := context.Background()
 
 	viper.SetConfigFile("app.env")
 	if err := viper.ReadInConfig(); err != nil {
-		log.Fatalf("Error while reading configuration file %s", err)
+		log.Printf("error while reading configuration file: %s\n", err.Error())
+		log.Println("application will run without configurations from config file")
 	}
 
-	ctx := context.Background()
-
 	if err := store.InitializeDB(ctx, store.MongoDB); err != nil {
-		panic(err)
+		log.Fatalf("failed to initialize DB: %s", err.Error())
 	}
 
 	router := gin.Default()
