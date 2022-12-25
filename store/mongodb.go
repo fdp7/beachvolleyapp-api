@@ -26,9 +26,9 @@ func NewMongoDBStore(ctx context.Context, connectionURI string) (Store, error) {
 	}
 	ms := mongoStore{
 		client:           client,
-		dbName:           viper.Get("DATABASE_NAME").(string),
-		matchCollection:  viper.Get("MATCH_COLLECTION_NAME").(string),
-		playerCollection: viper.Get("PLAYER_COLLECTION_NAME").(string),
+		dbName:           viper.GetString("DATABASE_NAME"),
+		matchCollection:  viper.GetString("MATCH_COLLECTION_NAME"),
+		playerCollection: viper.GetString("PLAYER_COLLECTION_NAME"),
 	}
 	return &ms, nil
 }

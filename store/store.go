@@ -36,7 +36,7 @@ const (
 func InitializeDB(ctx context.Context, t StoreType) error {
 	switch t {
 	case MongoDB:
-		connectionUri := viper.Get("CONNECTIONSTRING_MONGODB").(string)
+		connectionUri := viper.GetString("CONNECTIONSTRING_MONGODB")
 		db, err := NewMongoDBStore(ctx, connectionUri)
 		if err != nil {
 			return fmt.Errorf("failed to initialize mongoDB: %w", err)

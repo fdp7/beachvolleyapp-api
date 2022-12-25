@@ -17,6 +17,8 @@ func main() {
 	ctx := context.Background()
 
 	viper.SetConfigFile("app.env")
+	viper.AutomaticEnv()
+
 	if err := viper.ReadInConfig(); err != nil {
 		log.Printf("error while reading configuration file: %s\n", err.Error())
 		log.Println("application will run without configurations from config file")
