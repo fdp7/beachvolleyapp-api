@@ -46,6 +46,83 @@ func (s *mongoStore) AddMatch(ctx context.Context, m *Match) error {
 	if err != nil {
 		return fmt.Errorf("failed to add a new match: %w", err)
 	}
+	players := append(m.TeamA, m.TeamB...)
+	// update player stats based on played match
+	onDeletedMatch := false
+	for _, player := range players {
+		s.updatePlayer(ctx, m, player, onDeletedMatch)
+	}
+
+	return nil
+}
+
+// update player stats based on played or deleted match
+func (s *mongoStore) updatePlayer(ctx context.Context, m *Match, p string, onDeletedMatch bool) error {
+	// GetPlayer where _id/name is equal to p.
+	// update player: 1) +1 to match_count; if he's won, +1 win_count
+
+	collection := s.client.Database(s.dbName).Collection(s.playerCollection)
+
+	playerInTeamA := false
+	isTeamAWinner := false
+	isPlayerWinner := false
+
+	// check which team player played for
+	for _, i := range m.TeamA {
+		if i == p {
+			playerInTeamA = true
+			break
+		}
+	}
+	// check which team won
+	if m.ScoreA > m.ScoreB {
+		isTeamAWinner = true
+	}
+	//check if player won
+	if playerInTeamA && isTeamAWinner {
+		isPlayerWinner = true
+	} else if !playerInTeamA && !isTeamAWinner {
+		isPlayerWinner = true
+	}
+
+	// get player
+	filter := bson.M{"name": p}
+
+	result := collection.FindOne(ctx, filter)
+	if result == nil {
+		return fmt.Errorf("failed to retrieve player: %w", result)
+	}
+
+	player := &Player{}
+	if err := result.Decode(player); err != nil {
+		return ErrNoPlayerFound
+	}
+
+	// update player stats
+	newMatchCount := player.MatchCount
+	newWinCount := player.WinCount
+	if onDeletedMatch {
+		newMatchCount = player.MatchCount - 1
+		if isPlayerWinner {
+			newWinCount = player.WinCount - 1
+		}
+	} else {
+		newMatchCount = player.MatchCount + 1
+		if isPlayerWinner {
+			newWinCount = player.WinCount + 1
+		}
+	}
+	update := bson.D{{"$set",
+		bson.D{
+			{"match_count", newMatchCount},
+			{"win_count", newWinCount},
+		},
+	}}
+	opts := options.Update().SetUpsert(false)
+	_, err := collection.UpdateOne(ctx, filter, update, opts)
+	if err != nil {
+		return fmt.Errorf("failed to update player: %w", err)
+	}
 
 	return nil
 }
@@ -59,7 +136,6 @@ func (s *mongoStore) GetMatches(ctx context.Context, player string) ([]byte, err
 		filterTeamA := bson.M{"team_a": player}
 		filterTeamB := bson.M{"team_b": player}
 		filter = bson.M{"$or": []bson.M{filterTeamA, filterTeamB}}
-
 	}
 
 	orderDate := bson.D{{"date", -1}}
