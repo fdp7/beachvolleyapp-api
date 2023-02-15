@@ -59,7 +59,8 @@ func (s *mongoStore) AddMatch(ctx context.Context, m *Match) error {
 // update player stats based on played or deleted match
 func (s *mongoStore) updatePlayer(ctx context.Context, m *Match, p string, onDeletedMatch bool) error {
 	// GetPlayer where _id/name is equal to p.
-	// update player: 1) +1 to match_count; if he's won, +1 win_count
+	// if added match: +1 to match_count; if he's won, +1 win_count
+	// if deleted match: -1 to match_count; if he's won, -1 win_count
 
 	collection := s.client.Database(s.dbName).Collection(s.playerCollection)
 
@@ -166,16 +167,30 @@ func (s *mongoStore) GetMatches(ctx context.Context, player string) ([]byte, err
 func (s *mongoStore) DeleteMatch(ctx context.Context, matchDate time.Time) error {
 	collection := s.client.Database(s.dbName).Collection(s.matchCollection)
 
+	// get match by date and delete; update stats of players that played the deleted match
 	filter := bson.M{"date": matchDate}
+
+	result := collection.FindOne(ctx, filter)
+
+	match := &Match{}
+
+	if err := result.Decode(match); err != nil {
+		return ErrNoMatchFound
+	}
+
+	players := append(match.TeamA, match.TeamB...)
+
 	deletedCount, err := collection.DeleteOne(ctx, filter)
-	/*if deletedCount.DeletedCount == 0 {
-		return fmt.Errorf("match found but failed to delete")
-	}*/
+
 	if deletedCount.DeletedCount == 0 {
 		return ErrNoMatchFound
 	}
 	if err != nil {
 		return fmt.Errorf("failed to delete match %w, err")
+	}
+
+	for _, player := range players {
+		s.updatePlayer(ctx, match, player, true)
 	}
 
 	return nil
@@ -193,6 +208,9 @@ func (s *mongoStore) AddPlayer(ctx context.Context, p *Player) error {
 	})
 	if mongo.IsDuplicateKeyError(err) {
 		return ErrPlayerDuplicated
+	}
+	if len(p.Name) < 2 {
+		return ErrNotValidName
 	}
 	if err != nil {
 		return fmt.Errorf("failed to add player to db: %w", err)
