@@ -24,6 +24,7 @@ var DB Store
 var (
 	ErrNoMatchFound     = errors.New("no match found")
 	ErrPlayerDuplicated = errors.New("player already registered")
+	ErrNotValidName     = errors.New("player name is not valid")
 	ErrNoPlayerFound    = errors.New("no player found")
 )
 
