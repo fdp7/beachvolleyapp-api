@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/spf13/viper"
@@ -48,81 +49,9 @@ func (s *mongoStore) AddMatch(ctx context.Context, m *Match) error {
 	}
 	players := append(m.TeamA, m.TeamB...)
 	// update player stats based on played match
-	onDeletedMatch := false
-	for _, player := range players {
-		s.updatePlayer(ctx, m, player, onDeletedMatch)
-	}
-
-	return nil
-}
-
-// update player stats based on played or deleted match
-func (s *mongoStore) updatePlayer(ctx context.Context, m *Match, p string, onDeletedMatch bool) error {
-	// GetPlayer where _id/name is equal to p.
-	// if added match: +1 to match_count; if he's won, +1 win_count
-	// if deleted match: -1 to match_count; if he's won, -1 win_count
-
-	collection := s.client.Database(s.dbName).Collection(s.playerCollection)
-
-	playerInTeamA := false
-	isTeamAWinner := false
-	isPlayerWinner := false
-
-	// check which team player played for
-	for _, i := range m.TeamA {
-		if i == p {
-			playerInTeamA = true
-			break
-		}
-	}
-	// check which team won
-	if m.ScoreA > m.ScoreB {
-		isTeamAWinner = true
-	}
-	//check if player won
-	if playerInTeamA && isTeamAWinner {
-		isPlayerWinner = true
-	} else if !playerInTeamA && !isTeamAWinner {
-		isPlayerWinner = true
-	}
-
-	// get player
-	filter := bson.M{"name": p}
-
-	result := collection.FindOne(ctx, filter)
-	if result == nil {
-		return fmt.Errorf("failed to retrieve player: %w", result)
-	}
-
-	player := &Player{}
-	if err := result.Decode(player); err != nil {
-		return ErrNoPlayerFound
-	}
-
-	// update player stats
-	newMatchCount := player.MatchCount
-	newWinCount := player.WinCount
-	if onDeletedMatch {
-		newMatchCount = player.MatchCount - 1
-		if isPlayerWinner {
-			newWinCount = player.WinCount - 1
-		}
-	} else {
-		newMatchCount = player.MatchCount + 1
-		if isPlayerWinner {
-			newWinCount = player.WinCount + 1
-		}
-	}
-	update := bson.D{{"$set",
-		bson.D{
-			{"match_count", newMatchCount},
-			{"win_count", newWinCount},
-		},
-	}}
-	opts := options.Update().SetUpsert(false)
-	_, err := collection.UpdateOne(ctx, filter, update, opts)
+	err = s.updatePlayer(ctx, m, players, false)
 	if err != nil {
-		return fmt.Errorf("failed to update player: %w", err)
+		return fmt.Errorf("failed to update playes stats: %w", err)
 	}
 
 	return nil
@@ -140,9 +69,9 @@ func (s *mongoStore) GetMatches(ctx context.Context, player string) ([]byte, err
 	}
 
 	orderDate := bson.D{{"date", -1}}
-	options := options.Find().SetSort(orderDate).SetLimit(10)
+	sort := options.Find().SetSort(orderDate).SetLimit(10)
 
-	results, err := collection.Find(ctx, filter, options)
+	results, err := collection.Find(ctx, filter, sort)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve matches: %w", err)
 	}
@@ -189,8 +118,9 @@ func (s *mongoStore) DeleteMatch(ctx context.Context, matchDate time.Time) error
 		return fmt.Errorf("failed to delete match %w, err")
 	}
 
-	for _, player := range players {
-		s.updatePlayer(ctx, match, player, true)
+	err = s.updatePlayer(ctx, match, players, true)
+	if err != nil {
+		return fmt.Errorf("failed to update player stats: %w", err)
 	}
 
 	return nil
@@ -205,6 +135,7 @@ func (s *mongoStore) AddPlayer(ctx context.Context, p *Player) error {
 		"password":    p.Password,
 		"match_count": p.MatchCount,
 		"win_count":   p.WinCount,
+		"elo":         100.0, //default Elo for a new player
 	})
 	if mongo.IsDuplicateKeyError(err) {
 		return ErrPlayerDuplicated
@@ -243,10 +174,10 @@ func (s *mongoStore) GetRanking(ctx context.Context) ([]byte, error) {
 	// get all players, ordered by max(win_count) and min(match_count) and alphabetical(name)
 	filter := bson.M{}
 
-	order := bson.D{{"win_count", -1}, {"match_count", 1}, {"name", 1}}
-	options := options.Find().SetSort(order)
+	order := bson.D{{"elo", -1}, {"win_count", -1}, {"match_count", 1}, {"name", 1}}
+	sort := options.Find().SetSort(order)
 
-	results, err := collection.Find(ctx, filter, options)
+	results, err := collection.Find(ctx, filter, sort)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve ranking of players: %w", err)
 	}
@@ -266,4 +197,151 @@ func (s *mongoStore) GetRanking(ctx context.Context) ([]byte, error) {
 	}
 
 	return json.Marshal(players)
+}
+
+// update player stats based on played or deleted match
+func (s *mongoStore) updatePlayer(ctx context.Context, m *Match, players []string, onDeletedMatch bool) error {
+
+	collection := s.client.Database(s.dbName).Collection(s.playerCollection)
+
+	// check which team won
+	isTeamAWinner := false
+	if m.ScoreA > m.ScoreB {
+		isTeamAWinner = true
+	}
+
+	// get list of players entities in the match
+	var playersList []*Player
+
+	for _, p := range players {
+
+		// get player
+		filter := bson.M{"name": p}
+		result := collection.FindOne(ctx, filter)
+		if result == nil {
+			return fmt.Errorf("failed to retrieve player: %w", result)
+		}
+
+		player := &Player{}
+		if err := result.Decode(player); err != nil {
+			return ErrNoPlayerFound
+		}
+		playersList = append(playersList, player)
+	}
+
+	// get teamA and teamB total ratings
+	var teamARating float64
+	var teamBRating float64
+
+	for _, player := range playersList {
+		for _, playerName := range m.TeamA {
+			if playerName == player.Name {
+				teamARating = teamARating + player.Elo
+			}
+		}
+		for _, playerName := range m.TeamB {
+			if playerName == player.Name {
+				teamBRating = teamBRating + player.Elo
+			}
+		}
+	}
+
+	// compute updated stats
+	for _, p := range playersList {
+
+		playerInTeamA := false
+		isPlayerWinner := false
+
+		// check which team player played for
+		for _, i := range m.TeamA {
+			if i == p.Name {
+				playerInTeamA = true
+				break
+			}
+		}
+
+		//check if player won
+		if playerInTeamA && isTeamAWinner {
+			isPlayerWinner = true
+		} else if !playerInTeamA && !isTeamAWinner {
+			isPlayerWinner = true
+		}
+
+		// edit player stats
+		if onDeletedMatch {
+			p.MatchCount = p.MatchCount - 1
+			if isPlayerWinner {
+				p.WinCount = p.WinCount - 1
+			}
+			p.Elo, _ = s.computeElo(p, teamARating, teamBRating, playerInTeamA, isPlayerWinner, true)
+		} else {
+			p.MatchCount = p.MatchCount + 1
+			if isPlayerWinner {
+				p.WinCount = p.WinCount + 1
+			}
+			p.Elo, _ = s.computeElo(p, teamARating, teamBRating, playerInTeamA, isPlayerWinner, false)
+		}
+	}
+
+	// update players stats
+	for _, p := range playersList {
+
+		filter := bson.M{"name": p.Name}
+		update := bson.D{{"$set",
+			bson.D{
+				{"match_count", p.MatchCount},
+				{"win_count", p.WinCount},
+				{"elo", p.Elo},
+			},
+		}}
+		opts := options.Update().SetUpsert(false)
+
+		_, err := collection.UpdateOne(ctx, filter, update, opts)
+		if err != nil {
+			return fmt.Errorf("failed to update player: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *mongoStore) computeElo(p *Player, teamARating float64, teamBRating float64,
+	playerInTeamA bool, isPlayerWinner bool, onDeletedMatch bool) (float64, error) {
+
+	var playerWeight float64
+	var expectedResult float64
+	var score float64
+	var d float64
+	var k float64
+
+	d = 400
+	k = 32
+
+	// calculate player weight (importance) in team [0,1] and expected match result based on team ratings
+	if playerInTeamA {
+		playerWeight = p.Elo / teamARating
+		expectedResult = 1 / (1 + math.Pow(10, (teamBRating-teamARating)/d))
+	} else {
+		playerWeight = p.Elo / teamBRating
+		expectedResult = 1 / (1 + math.Pow(10, (teamARating-teamBRating)/d))
+	}
+
+	// define score values
+	if isPlayerWinner {
+		score = 1
+	} else {
+		score = 0
+	}
+
+	// compute updated player rating
+	if onDeletedMatch {
+		// if deleting match rollback the update to rating according to the removed match.
+		// actually you would need the previous teamA and teamB exact ratings to be precise, while I can only have the already updated ratings.
+		// so there is a small difference even after deleting the match.
+		p.Elo = p.Elo - k*(score-expectedResult)*playerWeight
+	} else {
+		p.Elo = p.Elo + k*(score-expectedResult)*playerWeight
+	}
+
+	return p.Elo, nil
 }
