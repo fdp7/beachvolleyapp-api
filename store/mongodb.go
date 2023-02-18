@@ -199,7 +199,7 @@ func (s *mongoStore) GetRanking(ctx context.Context) ([]byte, error) {
 	return json.Marshal(players)
 }
 
-// update player stats based on played or deleted match
+// update player stats (match_count, win_count, elo) based on played or deleted match
 func (s *mongoStore) updatePlayer(ctx context.Context, m *Match, players []string, onDeletedMatch bool) error {
 
 	collection := s.client.Database(s.dbName).Collection(s.playerCollection)
@@ -305,6 +305,16 @@ func (s *mongoStore) updatePlayer(ctx context.Context, m *Match, players []strin
 	return nil
 }
 
+// compute updated elo for player according to the following formula:
+// r^ = r + k(s-e)alpha , where
+//
+//	r^ is the updated elo
+//	r is the previous elo
+//	k = 32
+//	s = {1,0} is the assigned score for win/loss
+//	e = 1 / ( 1 + 10 ^(( Rb - Ra) / d) ) is the expected probability that player wins the match, where
+//		R is team total elo (sum of elo per team); d = 400
+//	alpha = r / R is the player weight/importance for his team
 func (s *mongoStore) computeElo(p *Player, teamARating float64, teamBRating float64,
 	playerInTeamA bool, isPlayerWinner bool, onDeletedMatch bool) (float64, error) {
 
@@ -317,7 +327,7 @@ func (s *mongoStore) computeElo(p *Player, teamARating float64, teamBRating floa
 	d = 400
 	k = 32
 
-	// calculate player weight (importance) in team [0,1] and expected match result based on team ratings
+	// calculate player weight in team [0,1] and expected match result based on team total ratings
 	if playerInTeamA {
 		playerWeight = p.Elo / teamARating
 		expectedResult = 1 / (1 + math.Pow(10, (teamBRating-teamARating)/d))
@@ -335,9 +345,9 @@ func (s *mongoStore) computeElo(p *Player, teamARating float64, teamBRating floa
 
 	// compute updated player rating
 	if onDeletedMatch {
-		// if deleting match rollback the update to rating according to the removed match.
+		// if deleting match --> rollback the updated rating based on the removed match.
 		// actually you would need the previous teamA and teamB exact ratings to be precise, while I can only have the already updated ratings.
-		// so there is a small difference even after deleting the match.
+		// so there is a small difference after deleting the match with respect to the real previous elo
 		p.Elo = p.Elo - k*(score-expectedResult)*playerWeight
 	} else {
 		p.Elo = p.Elo + k*(score-expectedResult)*playerWeight
