@@ -237,12 +237,12 @@ func (s *mongoStore) updatePlayer(ctx context.Context, m *Match, players []strin
 	for _, player := range playersList {
 		for _, playerName := range m.TeamA {
 			if playerName == player.Name {
-				teamARating = teamARating + player.Elo[len(player.Elo)-1] // use last elo
+				teamARating = teamARating + player.LastElo // use last elo
 			}
 		}
 		for _, playerName := range m.TeamB {
 			if playerName == player.Name {
-				teamBRating = teamBRating + player.Elo[len(player.Elo)-1]
+				teamBRating = teamBRating + player.LastElo
 			}
 		}
 	}
@@ -331,10 +331,10 @@ func (s *mongoStore) computeElo(p *Player, teamARating float64, teamBRating floa
 
 	// calculate player weight in team [0,1] and expected match result based on team total ratings
 	if playerInTeamA {
-		playerWeight = p.Elo[len(p.Elo)-1] / teamARating
+		playerWeight = p.LastElo / teamARating
 		expectedResult = 1 / (1 + math.Pow(10, (teamBRating-teamARating)/d))
 	} else {
-		playerWeight = p.Elo[len(p.Elo)-1] / teamBRating
+		playerWeight = p.LastElo / teamBRating
 		expectedResult = 1 / (1 + math.Pow(10, (teamARating-teamBRating)/d))
 	}
 
@@ -351,10 +351,10 @@ func (s *mongoStore) computeElo(p *Player, teamARating float64, teamBRating floa
 		// if deleting match --> rollback the updated rating based on the removed match.
 		// actually you would need the previous teamA and teamB exact ratings to be precise, while I can only have the already updated ratings.
 		// so there is a small difference after deleting the match with respect to the real previous elo
-		p.LastElo = p.Elo[len(p.Elo)-1] - k*(score-expectedResult)*playerWeight
+		p.LastElo = p.LastElo - k*(score-expectedResult)*playerWeight
 		p.Elo = append(p.Elo, p.LastElo)
 	} else {
-		p.LastElo = p.Elo[len(p.Elo)-1] + k*(score-expectedResult)*playerWeight
+		p.LastElo = p.LastElo + k*(score-expectedResult)*playerWeight
 		p.Elo = append(p.Elo, p.LastElo)
 	}
 
