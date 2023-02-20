@@ -138,5 +138,7 @@ func playerToStorePlayer(p *Player) *store.Player {
 		Password:   p.Password,
 		MatchCount: p.MatchCount,
 		WinCount:   p.WinCount,
+		Elo:        p.Elo,
+		LastElo:    p.LastElo,
 	}
 }
