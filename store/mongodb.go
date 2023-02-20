@@ -136,6 +136,7 @@ func (s *mongoStore) AddPlayer(ctx context.Context, p *Player) error {
 		"match_count": p.MatchCount,
 		"win_count":   p.WinCount,
 		"elo":         100.0, //default Elo for a new player
+		"last_elo":    100.0, //default Elo for a new player
 	})
 	if mongo.IsDuplicateKeyError(err) {
 		return ErrPlayerDuplicated
@@ -171,10 +172,10 @@ func (s *mongoStore) GetPlayer(ctx context.Context, playerName string) ([]byte, 
 func (s *mongoStore) GetRanking(ctx context.Context) ([]byte, error) {
 	collection := s.client.Database(s.dbName).Collection(s.playerCollection)
 
-	// get all players, ordered by max(win_count) and min(match_count) and alphabetical(name)
+	// get all players, ordered by max(last_elo), max(win_count) and min(match_count) and alphabetical(name)
 	filter := bson.M{}
 
-	order := bson.D{{"elo", -1}, {"win_count", -1}, {"match_count", 1}, {"name", 1}}
+	order := bson.D{{"last_elo", -1}, {"win_count", -1}, {"match_count", 1}, {"name", 1}}
 	sort := options.Find().SetSort(order)
 
 	results, err := collection.Find(ctx, filter, sort)
@@ -236,12 +237,12 @@ func (s *mongoStore) updatePlayer(ctx context.Context, m *Match, players []strin
 	for _, player := range playersList {
 		for _, playerName := range m.TeamA {
 			if playerName == player.Name {
-				teamARating = teamARating + player.Elo
+				teamARating = teamARating + player.LastElo // use last elo
 			}
 		}
 		for _, playerName := range m.TeamB {
 			if playerName == player.Name {
-				teamBRating = teamBRating + player.Elo
+				teamBRating = teamBRating + player.LastElo
 			}
 		}
 	}
@@ -273,13 +274,13 @@ func (s *mongoStore) updatePlayer(ctx context.Context, m *Match, players []strin
 			if isPlayerWinner {
 				p.WinCount = p.WinCount - 1
 			}
-			p.Elo, _ = s.computeElo(p, teamARating, teamBRating, playerInTeamA, isPlayerWinner, true)
+			p.LastElo, p.Elo, _ = s.computeElo(p, teamARating, teamBRating, playerInTeamA, isPlayerWinner, true)
 		} else {
 			p.MatchCount = p.MatchCount + 1
 			if isPlayerWinner {
 				p.WinCount = p.WinCount + 1
 			}
-			p.Elo, _ = s.computeElo(p, teamARating, teamBRating, playerInTeamA, isPlayerWinner, false)
+			p.LastElo, p.Elo, _ = s.computeElo(p, teamARating, teamBRating, playerInTeamA, isPlayerWinner, false)
 		}
 	}
 
@@ -292,6 +293,7 @@ func (s *mongoStore) updatePlayer(ctx context.Context, m *Match, players []strin
 				{"match_count", p.MatchCount},
 				{"win_count", p.WinCount},
 				{"elo", p.Elo},
+				{"last_elo", p.LastElo},
 			},
 		}}
 		opts := options.Update().SetUpsert(false)
@@ -316,7 +318,7 @@ func (s *mongoStore) updatePlayer(ctx context.Context, m *Match, players []strin
 //		R is team total elo (sum of elo per team); d = 400
 //	alpha = r / R is the player weight/importance for his team
 func (s *mongoStore) computeElo(p *Player, teamARating float64, teamBRating float64,
-	playerInTeamA bool, isPlayerWinner bool, onDeletedMatch bool) (float64, error) {
+	playerInTeamA bool, isPlayerWinner bool, onDeletedMatch bool) (float64, []float64, error) {
 
 	var playerWeight float64
 	var expectedResult float64
@@ -329,10 +331,10 @@ func (s *mongoStore) computeElo(p *Player, teamARating float64, teamBRating floa
 
 	// calculate player weight in team [0,1] and expected match result based on team total ratings
 	if playerInTeamA {
-		playerWeight = p.Elo / teamARating
+		playerWeight = p.LastElo / teamARating
 		expectedResult = 1 / (1 + math.Pow(10, (teamBRating-teamARating)/d))
 	} else {
-		playerWeight = p.Elo / teamBRating
+		playerWeight = p.LastElo / teamBRating
 		expectedResult = 1 / (1 + math.Pow(10, (teamARating-teamBRating)/d))
 	}
 
@@ -345,13 +347,16 @@ func (s *mongoStore) computeElo(p *Player, teamARating float64, teamBRating floa
 
 	// compute updated player rating
 	if onDeletedMatch {
+
 		// if deleting match --> rollback the updated rating based on the removed match.
 		// actually you would need the previous teamA and teamB exact ratings to be precise, while I can only have the already updated ratings.
 		// so there is a small difference after deleting the match with respect to the real previous elo
-		p.Elo = p.Elo - k*(score-expectedResult)*playerWeight
+		p.LastElo = p.LastElo - k*(score-expectedResult)*playerWeight
+		p.Elo = append(p.Elo, p.LastElo)
 	} else {
-		p.Elo = p.Elo + k*(score-expectedResult)*playerWeight
+		p.LastElo = p.LastElo + k*(score-expectedResult)*playerWeight
+		p.Elo = append(p.Elo, p.LastElo)
 	}
 
-	return p.Elo, nil
+	return p.LastElo, p.Elo, nil
 }
