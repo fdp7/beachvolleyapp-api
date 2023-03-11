@@ -271,8 +271,14 @@ func (s *mongoStore) updatePlayer(ctx context.Context, m *Match, players []strin
 		// edit player stats
 		if onDeletedMatch {
 			p.MatchCount = p.MatchCount - 1
+			if p.MatchCount < 0 {
+				p.MatchCount = 0
+			}
 			if isPlayerWinner {
 				p.WinCount = p.WinCount - 1
+			}
+			if p.WinCount < 0 {
+				p.WinCount = 0
 			}
 			p.LastElo, p.Elo, _ = s.computeElo(p, teamARating, teamBRating, playerInTeamA, isPlayerWinner, true)
 		} else {
