@@ -50,6 +50,7 @@ func GetMatches(ctx *gin.Context) {
 		return
 	}
 
+	//sport := ctx.Request.URL.Query().Get(da aggiungere) TODO
 	player := ctx.Request.URL.Query().Get(playerQueryParam)
 
 	result, err := store.DB.GetMatches(ctx, player)
