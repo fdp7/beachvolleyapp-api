@@ -10,18 +10,19 @@ import (
 )
 
 type UserStore interface {
-	GetUser(context.Context, string) ([]byte, error)
-	AddUser(context.Context, *User) error
+	GetUser(ctx context.Context, userName string) ([]byte, error)
+	AddUser(ctx context.Context, user *User) error
 }
 
 type SportStore interface {
-	AddMatch(context.Context, *Match) error
-	GetMatches(context.Context, string) ([]byte, error)
-	DeleteMatch(context.Context, time.Time) error
+	AddMatch(ctx context.Context, match *Match, sport Sport) error
+	GetMatches(ctx context.Context, playerName string, sport Sport) ([]byte, error)
+	DeleteMatch(ctx context.Context, date time.Time, sport Sport) error
 
-	AddPlayer(context.Context, *Player) error
-	GetPlayer(ctx context.Context, name string, sport Sport) ([]byte, error)
-	GetRanking(context.Context) ([]byte, error)
+	AddUserToSportDBs(ctx context.Context, user *User) error
+	AddPlayer(ctx context.Context, player *Player, sport Sport) error
+	GetPlayer(ctx context.Context, playerName string, sport Sport) ([]byte, error)
+	GetRanking(ctx context.Context, sport Sport) ([]byte, error)
 }
 
 type Sport string
@@ -42,7 +43,7 @@ var DBSport SportStore
 var (
 	ErrNoUserFound      = errors.New("no user found")
 	ErrUserDuplicated   = errors.New("user already registered")
-	ErrNotValidName     = errors.New("player name is not valid")
+	ErrNotValidName     = errors.New("user name is not valid")
 	ErrNoPlayerFound    = errors.New("no player found")
 	ErrPlayerDuplicated = errors.New("player already registered")
 	ErrNoMatchFound     = errors.New("no match found")

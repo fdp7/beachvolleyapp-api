@@ -25,7 +25,7 @@ func CheckPassword(user *User, providedPassword string) error {
 }
 
 func RegisterUser(ctx *gin.Context) {
-	if store.DB == nil {
+	if store.DBUser == nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "store is not initialized",
 		})
@@ -41,24 +41,45 @@ func RegisterUser(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "failed to encrypt password",
 		})
+
 		return
 	}
 
 	storeUser := userToStoreUser(user)
-	err := store.DB.AddUser(ctx, storeUser)
+	err := store.DBUser.AddUser(ctx, storeUser)
 	if errors.Is(err, store.ErrUserDuplicated) {
 		ctx.JSON(http.StatusForbidden, gin.H{
-			"message": "player already exists",
+			"message": "user already exists",
 		})
+
+		return
+	}
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "failed to add user",
+		})
+
+		return
+	}
+
+	err = store.DBSport.AddUserToSportDBs(ctx, storeUser)
+	if errors.Is(err, store.ErrPlayerDuplicated) {
+		ctx.JSON(http.StatusForbidden, gin.H{
+			"message": "player already exist",
+		})
+
 		return
 	}
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "failed to add player",
 		})
+
 		return
 	}
+
 	ctx.JSON(http.StatusCreated, gin.H{})
+
 }
 
 func userToStoreUser(u *User) *store.User {
