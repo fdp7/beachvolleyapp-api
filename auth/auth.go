@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/fdp7/beachvolleyapp-api/user"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
+	"github.com/fdp7/beachvolleyapp-api/user"
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 
@@ -110,7 +110,7 @@ func GenerateToken(ctx *gin.Context) {
 	u := &user.User{}
 	if err := json.Unmarshal(record, u); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"message": "failed to unmarshal player",
+			"message": "failed to unmarshal user",
 		})
 		return
 	}

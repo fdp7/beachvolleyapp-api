@@ -96,14 +96,3 @@ func GetRanking(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, gin.H{"ranking": players})
 }
-
-/*func userToStorePlayer(p *Player) *store.Player {
-	return &store.Player{
-		ID:         p.ID,
-		Name:       p.Name,
-		MatchCount: p.MatchCount,
-		WinCount:   p.WinCount,
-		Elo:        p.Elo,
-		LastElo:    p.LastElo,
-	}
-}*/

@@ -2,10 +2,12 @@ package user
 
 import (
 	"errors"
-	"github.com/fdp7/beachvolleyapp-api/store"
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
-	"net/http"
+
+	"github.com/fdp7/beachvolleyapp-api/store"
 )
 
 func HashPassword(user *User) error {
