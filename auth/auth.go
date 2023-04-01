@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/fdp7/beachvolleyapp-api/user"
 	"net/http"
 	"strings"
 	"time"
@@ -12,7 +13,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 
-	"github.com/fdp7/beachvolleyapp-api/player"
 	"github.com/fdp7/beachvolleyapp-api/store"
 )
 
@@ -86,43 +86,43 @@ func GenerateToken(ctx *gin.Context) {
 		return
 	}
 
-	if store.DB == nil {
+	if store.DBUser == nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "store is not initialized",
 		})
 		return
 	}
 
-	record, err := store.DB.GetPlayer(ctx, request.Name)
-	if errors.Is(err, store.ErrNoPlayerFound) || len(record) == 0 {
+	record, err := store.DBUser.GetUser(ctx, request.Name)
+	if errors.Is(err, store.ErrNoUserFound) || len(record) == 0 {
 		ctx.JSON(http.StatusNotFound, gin.H{
-			"message": "no player found",
+			"message": "no user found",
 		})
 		return
 	}
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"message": "can't find player",
+			"message": "can't find user",
 		})
 		return
 	}
 
-	user := &player.Player{}
-	if err := json.Unmarshal(record, user); err != nil {
+	u := &user.User{}
+	if err := json.Unmarshal(record, u); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "failed to unmarshal player",
 		})
 		return
 	}
 
-	if credentialError := player.CheckPassword(user, request.Password); credentialError != nil {
+	if credentialError := user.CheckPassword(u, request.Password); credentialError != nil {
 		ctx.JSON(http.StatusUnauthorized, gin.H{
 			"message": "invalid credential",
 		})
 		return
 	}
 
-	tokenString, err := GenerateJWT(user.Name)
+	tokenString, err := GenerateJWT(u.Name)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "failed to generate token",

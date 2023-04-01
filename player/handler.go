@@ -5,78 +5,33 @@ import (
 	"errors"
 	"net/http"
 
-	"golang.org/x/crypto/bcrypt"
-
 	"github.com/gin-gonic/gin"
 
 	"github.com/fdp7/beachvolleyapp-api/store"
 )
 
-func HashPassword(player *Player) error {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(player.Password), 1)
-	if err != nil {
-		return nil
-	}
-	player.Password = string(bytes)
-	return nil
-}
-
-func CheckPassword(player *Player, providedPassword string) error {
-	if err := bcrypt.CompareHashAndPassword([]byte(player.Password), []byte(providedPassword)); err != nil {
-		return err
-	}
-	return nil
-}
-
-func RegisterPlayer(ctx *gin.Context) {
-	if store.DB == nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"message": "store is not initialized",
-		})
-		return
-	}
-
-	player := &Player{}
-	if err := ctx.BindJSON(player); err != nil {
-		return
-	}
-
-	if err := HashPassword(player); err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"message": "failed to encrypt password",
-		})
-		return
-	}
-
-	storePlayer := playerToStorePlayer(player)
-	err := store.DB.AddPlayer(ctx, storePlayer)
-	if errors.Is(err, store.ErrPlayerDuplicated) {
-		ctx.JSON(http.StatusForbidden, gin.H{
-			"message": "player already exists",
-		})
-		return
-	}
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"message": "failed to add player",
-		})
-		return
-	}
-	ctx.JSON(http.StatusCreated, gin.H{})
-}
-
 func GetPlayer(ctx *gin.Context) {
-
 	name := ctx.Param("name")
+	sportStr := ctx.Param("sport")
 
-	if store.DB == nil {
+	sport := store.Sport(sportStr)
+	_, ok := store.EnabledSport[sport]
+	if !ok {
+		ctx.JSON(http.StatusNotAcceptable, gin.H{
+			"message": "sport is not enabled",
+		})
+
+		return
+	}
+
+	if store.DBSport == nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "store is not initialized",
 		})
 		return
 	}
 
-	result, err := store.DB.GetPlayer(ctx, name)
+	result, err := store.DBSport.GetPlayer(ctx, name, sport)
 	if errors.Is(err, store.ErrNoPlayerFound) {
 		ctx.JSON(http.StatusNotFound, gin.H{
 			"message": "no player found",
@@ -102,7 +57,18 @@ func GetPlayer(ctx *gin.Context) {
 }
 
 func GetRanking(ctx *gin.Context) {
-	if store.DB == nil {
+	sportStr := ctx.Param("sport")
+
+	sport := store.Sport(sportStr)
+	_, ok := store.EnabledSport[sport]
+	if !ok {
+		ctx.JSON(http.StatusNotAcceptable, gin.H{
+			"message": "sport is not enabled",
+		})
+		return
+	}
+
+	if store.DBSport == nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "store is not initialized",
 		})
@@ -110,7 +76,7 @@ func GetRanking(ctx *gin.Context) {
 		return
 	}
 
-	result, err := store.DB.GetRanking(ctx)
+	result, err := store.DBSport.GetRanking(ctx, sport)
 	if errors.Is(err, store.ErrNoPlayerFound) {
 		ctx.JSON(http.StatusNotFound, gin.H{
 			"message": "failed to retrieve players",
@@ -131,14 +97,13 @@ func GetRanking(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"ranking": players})
 }
 
-func playerToStorePlayer(p *Player) *store.Player {
+/*func userToStorePlayer(p *Player) *store.Player {
 	return &store.Player{
 		ID:         p.ID,
 		Name:       p.Name,
-		Password:   p.Password,
 		MatchCount: p.MatchCount,
 		WinCount:   p.WinCount,
 		Elo:        p.Elo,
 		LastElo:    p.LastElo,
 	}
-}
+}*/

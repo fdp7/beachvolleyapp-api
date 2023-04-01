@@ -17,7 +17,18 @@ const (
 )
 
 func AddMatch(ctx *gin.Context) {
-	if store.DB == nil {
+	sportStr := ctx.Param("sport")
+
+	sport := store.Sport(sportStr)
+	_, ok := store.EnabledSport[sport]
+	if !ok {
+		ctx.JSON(http.StatusNotAcceptable, gin.H{
+			"message": "sport is not enabled",
+		})
+		return
+	}
+
+	if store.DBSport == nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "store is not initialized",
 		})
@@ -32,7 +43,7 @@ func AddMatch(ctx *gin.Context) {
 
 	storeMatch := matchToStoreMatch(match)
 
-	err := store.DB.AddMatch(ctx, storeMatch)
+	err := store.DBSport.AddMatch(ctx, storeMatch, sport)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "failed to add match",
@@ -42,7 +53,19 @@ func AddMatch(ctx *gin.Context) {
 }
 
 func GetMatches(ctx *gin.Context) {
-	if store.DB == nil {
+	sportStr := ctx.Param("sport")
+
+	sport := store.Sport(sportStr)
+	_, ok := store.EnabledSport[sport]
+	if !ok {
+		ctx.JSON(http.StatusNotAcceptable, gin.H{
+			"message": "sport is not enabled",
+		})
+
+		return
+	}
+
+	if store.DBSport == nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "store is not initialized",
 		})
@@ -52,7 +75,7 @@ func GetMatches(ctx *gin.Context) {
 
 	player := ctx.Request.URL.Query().Get(playerQueryParam)
 
-	result, err := store.DB.GetMatches(ctx, player)
+	result, err := store.DBSport.GetMatches(ctx, player, sport)
 	if errors.Is(err, store.ErrNoMatchFound) {
 		ctx.JSON(http.StatusNotFound, gin.H{
 			"message": "no match found",
@@ -81,7 +104,19 @@ func GetMatches(ctx *gin.Context) {
 }
 
 func DeleteMatch(ctx *gin.Context) {
-	if store.DB == nil {
+	sportStr := ctx.Param("sport")
+
+	sport := store.Sport(sportStr)
+	_, ok := store.EnabledSport[sport]
+	if !ok {
+		ctx.JSON(http.StatusNotAcceptable, gin.H{
+			"message": "sport is not enabled",
+		})
+		
+		return
+	}
+
+	if store.DBSport == nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "store is not initialized",
 		})
@@ -97,7 +132,7 @@ func DeleteMatch(ctx *gin.Context) {
 		})
 	}
 
-	err = store.DB.DeleteMatch(ctx, FormattedMatchDate)
+	err = store.DBSport.DeleteMatch(ctx, FormattedMatchDate, sport)
 	if errors.Is(err, store.ErrNoMatchFound) {
 		ctx.JSON(http.StatusNoContent, gin.H{
 			"message": "no match found",

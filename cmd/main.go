@@ -11,6 +11,7 @@ import (
 	"github.com/fdp7/beachvolleyapp-api/match"
 	"github.com/fdp7/beachvolleyapp-api/player"
 	"github.com/fdp7/beachvolleyapp-api/store"
+	"github.com/fdp7/beachvolleyapp-api/user"
 )
 
 func main() {
@@ -30,20 +31,18 @@ func main() {
 
 	router := gin.Default()
 
-	router.POST("/player/signup", player.RegisterPlayer)
-	router.POST("/player/login", auth.GenerateToken)
+	router.POST("/user/signup", user.RegisterUser)
+	router.POST("/user/login", auth.GenerateToken)
 
 	// in secured all api that must be checked using a valid token
 	secured := router.Use(auth.Auth())
 	{
-		secured.GET("/ping", player.Ping)
+		secured.GET("/:sport/matches", match.GetMatches)
+		secured.POST("/:sport/match", match.AddMatch)
+		secured.DELETE("/:sport/match", match.DeleteMatch)
 
-		secured.GET("/matches", match.GetMatches)
-		secured.POST("/match", match.AddMatch)
-		secured.DELETE("/match", match.DeleteMatch)
-
-		secured.GET("/player/:name", player.GetPlayer)
-		secured.GET("/ranking", player.GetRanking)
+		secured.GET("/:sport/player/:name", player.GetPlayer)
+		secured.GET("/:sport/player/ranking", player.GetRanking)
 	}
 
 	router.Run()
