@@ -128,7 +128,7 @@ func (s *mongoSportStore) AddMatch(ctx context.Context, m *Match, sport Sport) e
 
 func (s *mongoSportStore) GetMatches(ctx context.Context, player string, sport Sport) ([]byte, error) {
 	dbName := s.sportDBs[sport]
-	collection := s.client.Database(dbName).Collection(s.playerCollection)
+	collection := s.client.Database(dbName).Collection(s.matchCollection)
 
 	// get all, ordered by descending date, limit number of samples, with query filters
 	filter := bson.M{}
