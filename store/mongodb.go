@@ -93,7 +93,7 @@ func (s *mongoUserStore) AddUser(ctx context.Context, u *User) error {
 	if mongo.IsDuplicateKeyError(err) {
 		return ErrUserDuplicated
 	}
-	if len(u.Name) <= 2 || len(u.Name) >= 11 {
+	if len(u.Name) < 2 || len(u.Name) >= 11 {
 		return ErrNotValidName
 	}
 	if err != nil {

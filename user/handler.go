@@ -48,17 +48,29 @@ func RegisterUser(ctx *gin.Context) {
 	}
 
 	storeUser := userToStoreUser(user)
-	err := store.DBUser.AddUser(ctx, storeUser)
-	if errors.Is(err, store.ErrUserDuplicated) {
+
+	//check duplicate name, then add new user
+	u, err := store.DBUser.GetUser(ctx, storeUser.Name)
+	if errors.Is(err, store.ErrNoUserFound) {
+		err = store.DBUser.AddUser(ctx, storeUser)
+		if errors.Is(err, store.ErrUserDuplicated) {
+			ctx.JSON(http.StatusForbidden, gin.H{
+				"message": "user already exists",
+			})
+
+			return
+		}
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"message": "failed to add user",
+			})
+
+			return
+		}
+	}
+	if len(u) != 0 {
 		ctx.JSON(http.StatusForbidden, gin.H{
 			"message": "user already exists",
-		})
-
-		return
-	}
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"message": "failed to add user",
 		})
 
 		return
