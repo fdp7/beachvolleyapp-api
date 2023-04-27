@@ -14,26 +14,26 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-type mongoSportStore struct {
+type MongoSportStore struct {
 	client           *mongo.Client
 	matchCollection  string
 	playerCollection string
 	sportDBs         map[Sport]string
 }
 
-type mongoUserStore struct {
+type MongoUserStore struct {
 	client         *mongo.Client
 	dbName         string
 	userCollection string
 }
 
-func NewMongoDBStore(ctx context.Context, connectionURI string) (*mongoUserStore, *mongoSportStore, error) {
+func NewMongoDBStore(ctx context.Context, connectionURI string) (*MongoUserStore, *MongoSportStore, error) {
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(connectionURI))
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create mongoDB client: %w", err)
 	}
 
-	mus := mongoUserStore{
+	mus := MongoUserStore{
 		client:         client,
 		dbName:         viper.GetString("DB_USER_NAME"),
 		userCollection: viper.GetString("COLLECTION_USER_NAME"),
@@ -53,7 +53,7 @@ func NewMongoDBStore(ctx context.Context, connectionURI string) (*mongoUserStore
 		sportDBs[sport] = dbName
 	}
 
-	mss := mongoSportStore{
+	mss := MongoSportStore{
 		client:           client,
 		matchCollection:  viper.GetString("COLLECTION_MATCH_NAME"),
 		playerCollection: viper.GetString("COLLECTION_PLAYER_NAME"),
@@ -63,7 +63,7 @@ func NewMongoDBStore(ctx context.Context, connectionURI string) (*mongoUserStore
 	return &mus, &mss, nil
 }
 
-func (s *mongoUserStore) GetUser(ctx context.Context, userName string) ([]byte, error) {
+func (s *MongoUserStore) GetUser(ctx context.Context, userName string) ([]byte, error) {
 	collection := s.client.Database(s.dbName).Collection(s.userCollection)
 
 	// get the player specified by playerName
@@ -82,7 +82,7 @@ func (s *mongoUserStore) GetUser(ctx context.Context, userName string) ([]byte, 
 	return json.Marshal(user)
 }
 
-func (s *mongoUserStore) AddUser(ctx context.Context, u *User) error {
+func (s *MongoUserStore) AddUser(ctx context.Context, u *User) error {
 	collection := s.client.Database(s.dbName).Collection(s.userCollection)
 
 	_, err := collection.InsertOne(ctx, bson.M{
@@ -102,7 +102,7 @@ func (s *mongoUserStore) AddUser(ctx context.Context, u *User) error {
 	return nil
 }
 
-func (s *mongoSportStore) AddMatch(ctx context.Context, m *Match, sport Sport) error {
+func (s *MongoSportStore) AddMatch(ctx context.Context, m *Match, sport Sport) error {
 	dbName := s.sportDBs[sport]
 	collection := s.client.Database(dbName).Collection(s.playerCollection)
 
@@ -126,7 +126,7 @@ func (s *mongoSportStore) AddMatch(ctx context.Context, m *Match, sport Sport) e
 	return nil
 }
 
-func (s *mongoSportStore) GetMatches(ctx context.Context, player string, sport Sport) ([]byte, error) {
+func (s *MongoSportStore) GetMatches(ctx context.Context, player string, sport Sport) ([]byte, error) {
 	dbName := s.sportDBs[sport]
 	collection := s.client.Database(dbName).Collection(s.matchCollection)
 
@@ -163,7 +163,7 @@ func (s *mongoSportStore) GetMatches(ctx context.Context, player string, sport S
 	return json.Marshal(matches)
 }
 
-func (s *mongoSportStore) DeleteMatch(ctx context.Context, matchDate time.Time, sport Sport) error {
+func (s *MongoSportStore) DeleteMatch(ctx context.Context, matchDate time.Time, sport Sport) error {
 	dbName := s.sportDBs[sport]
 	collection := s.client.Database(dbName).Collection(s.playerCollection)
 
@@ -197,7 +197,7 @@ func (s *mongoSportStore) DeleteMatch(ctx context.Context, matchDate time.Time, 
 	return nil
 }
 
-func (s *mongoSportStore) AddUserToSportDBs(ctx context.Context, user *User) error {
+func (s *MongoSportStore) AddUserToSportDBs(ctx context.Context, user *User) error {
 
 	player := userToStorePlayer(user)
 
@@ -227,7 +227,7 @@ func userToStorePlayer(user *User) *Player {
 	}
 }
 
-func (s *mongoSportStore) AddPlayer(ctx context.Context, player *Player, sport Sport) error {
+func (s *MongoSportStore) AddPlayer(ctx context.Context, player *Player, sport Sport) error {
 	dbName := s.sportDBs[sport]
 	collection := s.client.Database(dbName).Collection(s.playerCollection)
 
@@ -248,7 +248,7 @@ func (s *mongoSportStore) AddPlayer(ctx context.Context, player *Player, sport S
 	return nil
 }
 
-func (s *mongoSportStore) GetPlayer(ctx context.Context, playerName string, sport Sport) ([]byte, error) {
+func (s *MongoSportStore) GetPlayer(ctx context.Context, playerName string, sport Sport) ([]byte, error) {
 	dbName := s.sportDBs[sport]
 	collection := s.client.Database(dbName).Collection(s.playerCollection)
 
@@ -268,13 +268,12 @@ func (s *mongoSportStore) GetPlayer(ctx context.Context, playerName string, spor
 	return json.Marshal(player)
 }
 
-func (s *mongoSportStore) GetRanking(ctx context.Context, sport Sport) ([]byte, error) {
+func (s *MongoSportStore) GetRanking(ctx context.Context, sport Sport) ([]byte, error) {
 	dbName := s.sportDBs[sport]
 	collection := s.client.Database(dbName).Collection(s.playerCollection)
 
-	// get all players, ordered by max(last_elo), max(win_count) and min(match_count) and alphabetical(name)
-	filter := bson.M{}
-
+	// get all players with at least 1 match played, ordered by max(last_elo), max(win_count) and min(match_count) and alphabetical(name)
+	filter := bson.D{{"match_count", bson.D{{"$gt", 0}}}}
 	order := bson.D{{"last_elo", -1}, {"win_count", -1}, {"match_count", 1}, {"name", 1}}
 	sort := options.Find().SetSort(order)
 
@@ -301,7 +300,7 @@ func (s *mongoSportStore) GetRanking(ctx context.Context, sport Sport) ([]byte, 
 }
 
 // update player stats (match_count, win_count, elo) based on played or deleted match
-func (s *mongoSportStore) updatePlayer(ctx context.Context, m *Match, players []string, sport Sport, onDeletedMatch bool) error {
+func (s *MongoSportStore) updatePlayer(ctx context.Context, m *Match, players []string, sport Sport, onDeletedMatch bool) error {
 
 	dbName := s.sportDBs[sport]
 	collection := s.client.Database(dbName).Collection(s.playerCollection)
@@ -424,7 +423,7 @@ func (s *mongoSportStore) updatePlayer(ctx context.Context, m *Match, players []
 //	e = 1 / ( 1 + 10 ^(( Rb - Ra) / d) ) is the expected probability that player wins the match, where
 //		R is team total elo (sum of elo per team); d = 400
 //	alpha = r / R is the player weight/importance for his team
-func (s *mongoSportStore) computeElo(p *Player, teamARating float64, teamBRating float64,
+func (s *MongoSportStore) computeElo(p *Player, teamARating float64, teamBRating float64,
 	playerInTeamA bool, isPlayerWinner bool, onDeletedMatch bool) (float64, []float64, error) {
 
 	var playerWeight float64
