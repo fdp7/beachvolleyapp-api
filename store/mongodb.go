@@ -248,6 +248,37 @@ func (s *MongoSportStore) AddPlayer(ctx context.Context, player *Player, sport S
 	return nil
 }
 
+func (s *MongoSportStore) GetPlayers(ctx context.Context, sport Sport) ([]byte, error) {
+	dbName := s.sportDBs[sport]
+	collection := s.client.Database(dbName).Collection(s.playerCollection)
+
+	// get all players ordered by alphabetical(name)
+	filter := bson.M{}
+	order := bson.D{{"name", 1}}
+	sort := options.Find().SetSort(order)
+
+	results, err := collection.Find(ctx, filter, sort)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve players: %w", err)
+	}
+
+	var players []Player
+
+	for results.Next(ctx) {
+		player := Player{}
+		if err := results.Decode(&player); err != nil {
+			return nil, fmt.Errorf("failed to retrieve player: %w", err)
+		}
+		players = append(players, player)
+	}
+
+	if len(players) == 0 {
+		return nil, ErrNoPlayerFound
+	}
+
+	return json.Marshal(players)
+}
+
 func (s *MongoSportStore) GetPlayer(ctx context.Context, playerName string, sport Sport) ([]byte, error) {
 	dbName := s.sportDBs[sport]
 	collection := s.client.Database(dbName).Collection(s.playerCollection)

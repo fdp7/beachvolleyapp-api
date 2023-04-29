@@ -21,6 +21,7 @@ type SportStore interface {
 
 	AddUserToSportDBs(ctx context.Context, user *User) error
 	AddPlayer(ctx context.Context, player *Player, sport Sport) error
+	GetPlayers(ctx context.Context, sport Sport) ([]byte, error)
 	GetPlayer(ctx context.Context, playerName string, sport Sport) ([]byte, error)
 	GetRanking(ctx context.Context, sport Sport) ([]byte, error)
 }
