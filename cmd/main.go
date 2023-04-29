@@ -41,6 +41,7 @@ func main() {
 		secured.POST("/:sport/match", match.AddMatch)
 		secured.DELETE("/:sport/match", match.DeleteMatch)
 
+		secured.GET("/:sport/players", player.GetPlayers)
 		secured.GET("/:sport/player/:name", player.GetPlayer)
 		secured.GET("/:sport/player/ranking", player.GetRanking)
 	}
