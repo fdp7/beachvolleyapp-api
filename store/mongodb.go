@@ -104,7 +104,7 @@ func (s *MongoUserStore) AddUser(ctx context.Context, u *User) error {
 
 func (s *MongoSportStore) AddMatch(ctx context.Context, m *Match, sport Sport) error {
 	dbName := s.sportDBs[sport]
-	collection := s.client.Database(dbName).Collection(s.playerCollection)
+	collection := s.client.Database(dbName).Collection(s.matchCollection)
 
 	_, err := collection.InsertOne(ctx, bson.M{
 		"team_a":  m.TeamA,
