@@ -165,7 +165,7 @@ func (s *MongoSportStore) GetMatches(ctx context.Context, player string, sport S
 
 func (s *MongoSportStore) DeleteMatch(ctx context.Context, matchDate time.Time, sport Sport) error {
 	dbName := s.sportDBs[sport]
-	collection := s.client.Database(dbName).Collection(s.playerCollection)
+	collection := s.client.Database(dbName).Collection(s.matchCollection)
 
 	// get match by date and delete; update stats of players that played the deleted match
 	filter := bson.M{"date": matchDate}
