@@ -216,6 +216,36 @@ func (s *MongoSportStore) AddUserToSportDBs(ctx context.Context, user *User) err
 	return nil
 }
 
+func (s *MongoSportStore) AddExistingUserToNewSportDBs(ctx context.Context, user *User) error {
+
+	player := userToStorePlayer(user)
+	var newSports []Sport
+
+	// find for which sports the logged user is not registered then add to them
+	for sport := range s.sportDBs {
+
+		_, err := s.GetPlayer(ctx, player.Name, sport)
+
+		if err != nil {
+			newSports = append(newSports, sport)
+		}
+	}
+
+	for _, newSport := range newSports {
+
+		err := s.AddPlayer(ctx, player, newSport)
+
+		if mongo.IsDuplicateKeyError(err) {
+			return ErrPlayerDuplicated
+		}
+		if err != nil {
+			return fmt.Errorf("failed to add player to db: %w", err)
+		}
+	}
+
+	return nil
+}
+
 func userToStorePlayer(user *User) *Player {
 	return &Player{
 		ID:         user.Name,

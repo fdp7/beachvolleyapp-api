@@ -20,6 +20,7 @@ type SportStore interface {
 	DeleteMatch(ctx context.Context, date time.Time, sport Sport) error
 
 	AddUserToSportDBs(ctx context.Context, user *User) error
+	AddExistingUserToNewSportDBs(ctx context.Context, user *User) error
 	AddPlayer(ctx context.Context, player *Player, sport Sport) error
 	GetPlayers(ctx context.Context, sport Sport) ([]byte, error)
 	GetPlayer(ctx context.Context, playerName string, sport Sport) ([]byte, error)
@@ -31,11 +32,13 @@ type Sport string
 const (
 	Beachvolley Sport = "beachvolley"
 	Basket      Sport = "basket"
+	Pool        Sport = "pool"
 )
 
 var EnabledSport = map[Sport]struct{}{
 	Beachvolley: {},
 	Basket:      {},
+	Pool:        {},
 }
 
 var DBUser UserStore

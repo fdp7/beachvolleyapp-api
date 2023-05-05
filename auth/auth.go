@@ -129,6 +129,10 @@ func GenerateToken(ctx *gin.Context) {
 		})
 		return
 	}
+
+	// add user to player collections for sports created after user registration
+	storeUser := user.UserToStoreUser(u)
+	err = store.DBSport.AddExistingUserToNewSportDBs(ctx, storeUser)
 	ctx.JSON(http.StatusOK, gin.H{"token": tokenString})
 }
 
