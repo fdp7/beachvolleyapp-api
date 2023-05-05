@@ -47,7 +47,7 @@ func RegisterUser(ctx *gin.Context) {
 		return
 	}
 
-	storeUser := userToStoreUser(user)
+	storeUser := UserToStoreUser(user)
 
 	//check duplicate name, then add new user
 	u, err := store.DBUser.GetUser(ctx, storeUser.Name)
@@ -96,7 +96,7 @@ func RegisterUser(ctx *gin.Context) {
 
 }
 
-func userToStoreUser(u *User) *store.User {
+func UserToStoreUser(u *User) *store.User {
 	return &store.User{
 		ID:       u.ID,
 		Name:     u.Name,
