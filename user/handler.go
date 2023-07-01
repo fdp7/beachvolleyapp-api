@@ -51,8 +51,11 @@ func RegisterUser(ctx *gin.Context) {
 
 	//check duplicate name, then add new user
 	u, err := store.DBUser.GetUser(ctx, storeUser.Name)
+
 	if errors.Is(err, store.ErrNoUserFound) {
+
 		err = store.DBUser.AddUser(ctx, storeUser)
+
 		if errors.Is(err, store.ErrUserDuplicated) {
 			ctx.JSON(http.StatusForbidden, gin.H{
 				"message": "user already exists",
