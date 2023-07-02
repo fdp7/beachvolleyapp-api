@@ -18,6 +18,7 @@ type SportStore interface {
 	AddMatch(ctx context.Context, match *Match, sport Sport) error
 	GetMatches(ctx context.Context, playerName string, sport Sport) ([]byte, error)
 	DeleteMatch(ctx context.Context, date time.Time, sport Sport) error
+	GenerateBalancedTeams(ctx context.Context, playerNames []string, sport Sport) ([]string, []string, int, error)
 
 	AddUserToSportDBs(ctx context.Context, user *User) error
 	AddExistingUserToNewSportDBs(ctx context.Context, user *User) error
