@@ -138,3 +138,88 @@ func GetRanking(ctx *gin.Context) {
 	}
 	ctx.JSON(http.StatusOK, gin.H{"ranking": players})
 }
+
+func GenerateBalancedTeams(ctx *gin.Context) {
+	sportStr := ctx.Param("sport")
+
+	sport := store.Sport(sportStr)
+	_, ok := store.EnabledSport[sport]
+	if !ok {
+		ctx.JSON(http.StatusNotAcceptable, gin.H{
+			"message": "sport is not enabled",
+		})
+
+		return
+	}
+
+	if store.DBSport == nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "store is not initialized",
+		})
+
+		return
+	}
+
+	var body struct {
+		Players []Player `json:"players"`
+	}
+
+	if err := json.NewDecoder(ctx.Request.Body).Decode(&body); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"message": "invalid player data",
+		})
+
+		return
+	}
+
+	players := body.Players
+
+	/*players := &[]Player{}
+	if err := ctx.BindJSON(players); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"message": "invalid player data",
+		})
+
+		return
+	}
+	if len(*players) <= 1 {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"message": "not enough players",
+		})
+
+		return
+	}*/
+
+	// turn data into storage type
+	storePlayers := make([]store.Player, len(players))
+	for i, player := range players {
+		storePlayers[i] = playerToStorePlayer(player)
+	}
+
+	team1, team2, rtValueDiff, swaps, err := store.DBSport.GenerateBalancedTeams(ctx, storePlayers, sport)
+	if err != nil {
+		ctx.JSON(http.StatusNoContent, gin.H{
+			"message": "failed to generate balanced teams",
+		})
+
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"balancedTeam1":       team1,
+		"balancedTeam2":       team2,
+		"teamValueDifference": rtValueDiff,
+		"swaps":               swaps},
+	)
+}
+
+func playerToStorePlayer(p Player) store.Player {
+	return store.Player{
+		ID:         p.ID,
+		Name:       p.Name,
+		MatchCount: p.MatchCount,
+		WinCount:   p.WinCount,
+		Elo:        p.Elo,
+		LastElo:    p.LastElo,
+	}
+}

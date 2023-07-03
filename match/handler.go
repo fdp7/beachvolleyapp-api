@@ -38,6 +38,9 @@ func AddMatch(ctx *gin.Context) {
 
 	match := &Match{}
 	if err := ctx.BindJSON(match); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"message": "invalid match data",
+		})
 		return
 	}
 
@@ -112,7 +115,7 @@ func DeleteMatch(ctx *gin.Context) {
 		ctx.JSON(http.StatusNotAcceptable, gin.H{
 			"message": "sport is not enabled",
 		})
-		
+
 		return
 	}
 
