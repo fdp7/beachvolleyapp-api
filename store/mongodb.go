@@ -64,6 +64,8 @@ func NewMongoDBStore(ctx context.Context, connectionURI string) (*MongoUserStore
 	return &mus, &mss, nil
 }
 
+// --------------------- OPERATIONS
+
 func (s *MongoUserStore) GetUser(ctx context.Context, userName string) ([]byte, error) {
 	collection := s.client.Database(s.dbName).Collection(s.userCollection)
 
@@ -198,42 +200,42 @@ func (s *MongoSportStore) DeleteMatch(ctx context.Context, matchDate time.Time, 
 	return nil
 }
 
-func (s *MongoSportStore) GenerateBalancedTeams(ctx context.Context, playerNames []string, sport Sport) ([]string, []string, int, error) {
+func (s *MongoSportStore) GenerateBalancedTeams(ctx context.Context, players []Player, sport Sport) ([]string, []string, float64, int, error) {
 	dbName := s.sportDBs[sport]
 	collection := s.client.Database(dbName).Collection(s.playerCollection)
 
 	// retrieve players stats
-	players := make(map[string]float64)
+	playersStats := make(map[string]float64)
 
-	for playerName := range playerNames {
+	for _, p := range players {
 
-		filter := bson.M{"name": playerName}
+		filter := bson.M{"name": p.Name}
 
 		result := collection.FindOne(ctx, filter)
 		if result == nil {
-			return nil, nil, 0, fmt.Errorf("failed to retrieve player: %v", result)
+			return nil, nil, 0, 0, fmt.Errorf("failed to retrieve player: %v", result)
 		}
 
 		player := &Player{}
 		if err := result.Decode(player); err != nil {
-			return nil, nil, 0, ErrNoPlayerFound
+			return nil, nil, 0, 0, ErrNoPlayerFound
 		}
 
 		// compute RealTimeValue (rtValue)
 		rtValue := computeRealTimePlayerValue(player.LastElo, player.Elo, player.MatchCount, 3)
 
 		// fill the map with names and rtValues
-		players[player.Name] = rtValue
+		playersStats[player.Name] = rtValue
 	}
 
 	// generate Balanced Teams
-	team1, team2, swaps := balanceTeams(players, 20)
+	team1, team2, rtValueDiff, swaps := balanceTeams(playersStats, 1, 10)
 
-	if len(team1)+len(team2) < len(players) {
-		return nil, nil, 0, fmt.Errorf("balance teams generation failed")
+	if len(team1)+len(team2) < len(playersStats) {
+		return nil, nil, 0, 0, fmt.Errorf("balance teams generation failed")
 	}
 
-	return team1, team2, swaps, nil
+	return team1, team2, rtValueDiff, swaps, nil
 }
 
 func (s *MongoSportStore) AddUserToSportDBs(ctx context.Context, user *User) error {
@@ -283,17 +285,6 @@ func (s *MongoSportStore) AddExistingUserToNewSportDBs(ctx context.Context, user
 	}
 
 	return nil
-}
-
-func userToStorePlayer(user *User) *Player {
-	return &Player{
-		ID:         user.Name,
-		Name:       user.Name,
-		MatchCount: 0,                //default for a new player
-		WinCount:   0,                //default for a new player
-		Elo:        []float64{100.0}, //default for a new player
-		LastElo:    100.0,            //default for a new player
-	}
 }
 
 func (s *MongoSportStore) AddPlayer(ctx context.Context, player *Player, sport Sport) error {
@@ -397,6 +388,19 @@ func (s *MongoSportStore) GetRanking(ctx context.Context, sport Sport) ([]byte, 
 	}
 
 	return json.Marshal(players)
+}
+
+// --------------------- FUNCTIONS
+
+func userToStorePlayer(user *User) *Player {
+	return &Player{
+		ID:         user.Name,
+		Name:       user.Name,
+		MatchCount: 0,                //default for a new player
+		WinCount:   0,                //default for a new player
+		Elo:        []float64{100.0}, //default for a new player
+		LastElo:    100.0,            //default for a new player
+	}
 }
 
 // update player stats (match_count, win_count, elo) based on played or deleted match
@@ -568,13 +572,13 @@ func (s *MongoSportStore) computeElo(p *Player, teamARating float64, teamBRating
 }
 
 // Generate two teams such that : rtValue(team1) - rtValue(team2) =(about) 0
-func balanceTeams(players map[string]float64, teamsValueMaxDifference float64) ([]string, []string, int) {
+func balanceTeams(players map[string]float64, teamsValueMaxDifference float64, maxSwaps int) ([]string, []string, float64, int) {
 	// sort players from higher to lower rtValue
 	keys := make([]string, 0, len(players))
 	for key := range players {
 		keys = append(keys, key)
 	}
-	sort.SliceStable(players, func(i, j int) bool {
+	sort.SliceStable(keys, func(i, j int) bool {
 		return players[keys[i]] > players[keys[j]]
 	})
 
@@ -595,23 +599,33 @@ func balanceTeams(players map[string]float64, teamsValueMaxDifference float64) (
 		}
 	}
 
-	// attempt to swap players to minimize the difference between teams' rtValues
+	// attempt to swap players to minimize the difference between teams' rtValues until threshold teamsValueMaxDifference or maxSwaps is reached
 	swaps := 0
-	for math.Abs(team1rtValue-team2rtValue) >= teamsValueMaxDifference {
+	rtValueDiff := math.Abs(team1rtValue - team2rtValue)
+	for rtValueDiff >= teamsValueMaxDifference || swaps >= maxSwaps {
 		maxIdx, minIdx := findPlayersMaxMinValue(team1, team2, players)
 
 		player1 := team1[maxIdx]
 		player2 := team2[minIdx]
 
-		team1rtValue = team1rtValue - players[player1] + players[player2]
-		team2rtValue = team2rtValue + players[player1] - players[player2]
+		team1rtValueNew := team1rtValue - players[player1] + players[player2]
+		team2rtValueNew := team2rtValue + players[player1] - players[player2]
 
-		team1[maxIdx], team2[minIdx] = player2, player1
+		// if no improvement, that's already the best balance between teams
+		if rtValueDiff < math.Abs(team1rtValueNew-team2rtValueNew) {
+			break
+		} else {
+			// swap players, update team values and their difference
+			team1[maxIdx], team2[minIdx] = player2, player1
 
-		swaps++
+			team1rtValue, team2rtValue = team1rtValueNew, team2rtValueNew
+			rtValueDiff = math.Abs(team1rtValue - team2rtValue)
+
+			swaps++
+		}
 	}
 
-	return team1, team2, swaps
+	return team1, team2, rtValueDiff, swaps
 }
 
 // find the higher value for team1 and lower value for team2
@@ -642,36 +656,40 @@ func findPlayersMaxMinValue(team1 []string, team2 []string, players map[string]f
 // compute RealTimeValue for a player considering :
 // last elo, historic avg, latest avg, match played, latest period to analyze
 func computeRealTimePlayerValue(lastElo float64, elo []float64, matchCount int, latestPeriod int) float64 {
-	var e []float64 // sub-elo trend to analyze
+	var rtValue float64
+	e := make([]float64, latestPeriod) // sub-elo trend to analyze
 
-	// starting from second-latest match fill the sub-elo trend
 	if len(elo) > latestPeriod {
-		for i := 0; i <= latestPeriod; i++ {
-			e[i] = elo[len(elo)-1-i]
+		// starting from second-latest match fill the sub-elo trend
+		for i := 1; i <= latestPeriod; i++ {
+			e[i-1] = elo[len(elo)-1-i]
 		}
+
+		// compute historic and latest elo average
+		totalAvg := computeAvg(elo)
+		latestAvg := computeAvg(e)
+
+		// RealTimeVPlayerValue computed as
+		// last elo
+		// adding bonus/malus based on latest period performance
+		// weighted on number of games played wrt the considered latest period length
+		// such that the higher the matchCount, the higher the confidence in bonus/malus, the higher the bonus/malus incidence in RTV
+		rtValue = lastElo + ((latestAvg - totalAvg) / float64(matchCount/(matchCount-latestPeriod)))
+	} else {
+		rtValue = lastElo
 	}
-
-	totalAvg := computeAvg(elo)
-	latestAvg := computeAvg(e)
-
-	// RealTimeVPlayerValue computed as
-	// last elo
-	// adding bonus/malus based on latest period performance
-	// weighted on number of games played wrt the considered latest period length
-	// such that the higher the matchCount, the higher the confidence in bonus/malus, the higher the bonus/malus incidence in RTV
-	rtValue := lastElo + ((latestAvg - totalAvg) / float64(matchCount/(matchCount-latestPeriod)))
 
 	return rtValue
 }
 
 // compute average of values in a slice
 func computeAvg(n []float64) float64 {
-	sum := 0
+	var sum float64
 	for i := range n {
-		sum = sum + i
+		sum = sum + n[i]
 	}
 
-	average := float64(sum / len(n))
+	average := sum / float64(len(n))
 
 	return average
 }

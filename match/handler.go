@@ -3,7 +3,6 @@ package match
 import (
 	"encoding/json"
 	"errors"
-	"github.com/fdp7/beachvolleyapp-api/player"
 	"net/http"
 	"time"
 
@@ -39,6 +38,9 @@ func AddMatch(ctx *gin.Context) {
 
 	match := &Match{}
 	if err := ctx.BindJSON(match); err != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"message": "invalid match data",
+		})
 		return
 	}
 
@@ -148,54 +150,6 @@ func DeleteMatch(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{})
-}
-
-func GenerateBalancedTeams(ctx *gin.Context) {
-	sportStr := ctx.Param("sport")
-
-	sport := store.Sport(sportStr)
-	_, ok := store.EnabledSport[sport]
-	if !ok {
-		ctx.JSON(http.StatusNotAcceptable, gin.H{
-			"message": "sport is not enabled",
-		})
-
-		return
-	}
-
-	if store.DBSport == nil {
-		ctx.JSON(http.StatusInternalServerError, gin.H{
-			"message": "store is not initialized",
-		})
-
-		return
-	}
-
-	// DEVE STARE IN MATCH O PLAYER?? PERCHÈ IO GLI PASSERÒ DEI PLAYER,NON MATCH.
-	// MODIFICARE GenerateBalancedTeams PERCHÈ ACCOLGA DEI PLAYER E NON DELLE STRINGHE? TANT POI DENTRO SE LI ANDAVA A RECUPERARE DA SOLO COMUNQUE, TANTO VALE PASSARLI DIRETTAMENTE IO?
-	players := []player.Player{}
-	if err := ctx.BindJSON(players); err != nil {
-		return
-	}
-
-	var playerNames []string
-	for player := range players {
-		playerNames = append(playerNames)
-	}
-
-	team1, team2, swaps, err := store.DBSport.GenerateBalancedTeams(ctx, players, sport)
-	if err != nil {
-		ctx.JSON(http.StatusNoContent, gin.H{
-			"message": "failed to generate balanced teams",
-		})
-
-		return
-	}
-
-	ctx.JSON(http.StatusOK, gin.H{
-		"balancedTeam1": team1,
-		"balancedTeam2": team2,
-		"swaps":         swaps})
 }
 
 func matchToStoreMatch(m *Match) *store.Match {

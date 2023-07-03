@@ -37,12 +37,16 @@ func main() {
 	// in secured all api that must be checked using a valid token
 	secured := router.Use(auth.Auth())
 	{
+		// MATCH
 		secured.GET("/:sport/matches", match.GetMatches)
+
 		secured.POST("/:sport/match", match.AddMatch)
 		secured.DELETE("/:sport/match", match.DeleteMatch)
-		secured.GET("/:sport/match/balancingTeams", match.GenerateBalancedTeams)
 
+		// PLAYER
 		secured.GET("/:sport/players", player.GetPlayers)
+		secured.GET("/:sport/players/balanceTeams", player.GenerateBalancedTeams)
+
 		secured.GET("/:sport/player/:name", player.GetPlayer)
 		secured.GET("/:sport/player/ranking", player.GetRanking)
 	}
