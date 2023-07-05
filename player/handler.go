@@ -161,7 +161,7 @@ func GenerateBalancedTeams(ctx *gin.Context) {
 	}
 
 	var body struct {
-		Players []Player `json:"players"`
+		Players []string `json:"players"`
 	}
 
 	if err := json.NewDecoder(ctx.Request.Body).Decode(&body); err != nil {
@@ -172,23 +172,33 @@ func GenerateBalancedTeams(ctx *gin.Context) {
 		return
 	}
 
-	players := body.Players
+	playersNames := body.Players
+	var players []Player
 
-	/*players := &[]Player{}
-	if err := ctx.BindJSON(players); err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"message": "invalid player data",
-		})
+	for _, playerName := range playersNames {
+		result, err := store.DBSport.GetPlayer(ctx, playerName, sport)
+		if errors.Is(err, store.ErrNoPlayerFound) {
+			ctx.JSON(http.StatusNotFound, gin.H{
+				"message": "no player found",
+			})
+			return
+		}
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"message": "can't find player",
+			})
+			return
+		}
 
-		return
+		p := &Player{}
+		if err := json.Unmarshal(result, p); err != nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{
+				"message": "failed to unmarshal player",
+			})
+			return
+		}
+		players = append(players, *p)
 	}
-	if len(*players) <= 1 {
-		ctx.JSON(http.StatusBadRequest, gin.H{
-			"message": "not enough players",
-		})
-
-		return
-	}*/
 
 	// turn data into storage type
 	storePlayers := make([]store.Player, len(players))
