@@ -602,26 +602,30 @@ func balanceTeams(players map[string]float64, teamsValueMaxDifference float64, m
 	// attempt to swap players to minimize the difference between teams' rtValues until threshold teamsValueMaxDifference or maxSwaps is reached
 	swaps := 0
 	rtValueDiff := math.Abs(team1rtValue - team2rtValue)
-	for rtValueDiff >= teamsValueMaxDifference || swaps >= maxSwaps {
-		maxIdx, minIdx := findPlayersMaxMinValue(team1, team2, players)
-
-		player1 := team1[maxIdx]
-		player2 := team2[minIdx]
-
-		team1rtValueNew := team1rtValue - players[player1] + players[player2]
-		team2rtValueNew := team2rtValue + players[player1] - players[player2]
-
-		// if no improvement, that's already the best balance between teams
-		if rtValueDiff < math.Abs(team1rtValueNew-team2rtValueNew) {
+	for rtValueDiff >= teamsValueMaxDifference {
+		if swaps >= maxSwaps {
 			break
 		} else {
-			// swap players, update team values and their difference
-			team1[maxIdx], team2[minIdx] = player2, player1
+			maxIdx, minIdx := findPlayersMaxMinValue(team1, team2, players)
 
-			team1rtValue, team2rtValue = team1rtValueNew, team2rtValueNew
-			rtValueDiff = math.Abs(team1rtValue - team2rtValue)
+			player1 := team1[maxIdx]
+			player2 := team2[minIdx]
 
-			swaps++
+			team1rtValueNew := team1rtValue - players[player1] + players[player2]
+			team2rtValueNew := team2rtValue + players[player1] - players[player2]
+
+			// if no improvement, that's already the best balance between teams
+			if rtValueDiff < math.Abs(team1rtValueNew-team2rtValueNew) {
+				break
+			} else {
+				// swap players, update team values and their difference
+				team1[maxIdx], team2[minIdx] = player2, player1
+
+				team1rtValue, team2rtValue = team1rtValueNew, team2rtValueNew
+				rtValueDiff = math.Abs(team1rtValue - team2rtValue)
+
+				swaps++
+			}
 		}
 	}
 

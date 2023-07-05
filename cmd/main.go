@@ -45,7 +45,7 @@ func main() {
 
 		// PLAYER
 		secured.GET("/:sport/players", player.GetPlayers)
-		secured.GET("/:sport/players/balanceTeams", player.GenerateBalancedTeams)
+		secured.POST("/:sport/players/balanceTeams", player.GenerateBalancedTeams)
 
 		secured.GET("/:sport/player/:name", player.GetPlayer)
 		secured.GET("/:sport/player/ranking", player.GetRanking)
