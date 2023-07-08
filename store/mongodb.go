@@ -28,6 +28,12 @@ type MongoUserStore struct {
 	userCollection string
 }
 
+type Mate struct {
+	Name              string `json:"name"`
+	WonLossCount      int    `json:"won_loss_count"`
+	TotalMatchesCount int    `json:"total_matches_count"`
+}
+
 func NewMongoDBStore(ctx context.Context, connectionURI string) (*MongoUserStore, *MongoSportStore, error) {
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(connectionURI))
 	if err != nil {
@@ -200,44 +206,6 @@ func (s *MongoSportStore) DeleteMatch(ctx context.Context, matchDate time.Time, 
 	return nil
 }
 
-func (s *MongoSportStore) GenerateBalancedTeams(ctx context.Context, players []Player, sport Sport) ([]string, []string, float64, int, error) {
-	dbName := s.sportDBs[sport]
-	collection := s.client.Database(dbName).Collection(s.playerCollection)
-
-	// retrieve players stats
-	playersStats := make(map[string]float64)
-
-	for _, p := range players {
-
-		filter := bson.M{"name": p.Name}
-
-		result := collection.FindOne(ctx, filter)
-		if result == nil {
-			return nil, nil, 0, 0, fmt.Errorf("failed to retrieve player: %v", result)
-		}
-
-		player := &Player{}
-		if err := result.Decode(player); err != nil {
-			return nil, nil, 0, 0, ErrNoPlayerFound
-		}
-
-		// compute RealTimeValue (rtValue)
-		rtValue := computeRealTimePlayerValue(player.LastElo, player.Elo, player.MatchCount, 3)
-
-		// fill the map with names and rtValues
-		playersStats[player.Name] = rtValue
-	}
-
-	// generate Balanced Teams
-	team1, team2, rtValueDiff, swaps := balanceTeams(playersStats, 1, 10)
-
-	if len(team1)+len(team2) < len(playersStats) {
-		return nil, nil, 0, 0, fmt.Errorf("balance teams generation failed")
-	}
-
-	return team1, team2, rtValueDiff, swaps, nil
-}
-
 func (s *MongoSportStore) AddUserToSportDBs(ctx context.Context, user *User) error {
 
 	player := userToStorePlayer(user)
@@ -388,6 +356,80 @@ func (s *MongoSportStore) GetRanking(ctx context.Context, sport Sport) ([]byte, 
 	}
 
 	return json.Marshal(players)
+}
+
+func (s *MongoSportStore) GenerateBalancedTeams(ctx context.Context, players []Player, sport Sport) ([]string, []string, float64, int, error) {
+	dbName := s.sportDBs[sport]
+	collection := s.client.Database(dbName).Collection(s.playerCollection)
+
+	// retrieve players stats
+	playersStats := make(map[string]float64)
+
+	for _, p := range players {
+
+		filter := bson.M{"name": p.Name}
+
+		result := collection.FindOne(ctx, filter)
+		if result == nil {
+			return nil, nil, 0, 0, fmt.Errorf("failed to retrieve player: %v", result)
+		}
+
+		player := &Player{}
+		if err := result.Decode(player); err != nil {
+			return nil, nil, 0, 0, ErrNoPlayerFound
+		}
+
+		// compute RealTimeValue (rtValue)
+		rtValue := computeRealTimePlayerValue(player.LastElo, player.Elo, player.MatchCount, 3)
+
+		// fill the map with names and rtValues
+		playersStats[player.Name] = rtValue
+	}
+
+	// generate Balanced Teams
+	team1, team2, rtValueDiff, swaps := balanceTeams(playersStats, 1, 10)
+
+	if len(team1)+len(team2) < len(playersStats) {
+		return nil, nil, 0, 0, fmt.Errorf("balance teams generation failed")
+	}
+
+	return team1, team2, rtValueDiff, swaps, nil
+}
+
+func (s *MongoSportStore) GetMates(ctx context.Context, playerName string, sport Sport) (*Mate, *Mate, error) {
+	dbName := s.sportDBs[sport]
+	collection := s.client.Database(dbName).Collection(s.matchCollection)
+
+	// get all matches for given player
+	filter := bson.M{}
+	if playerName != "" {
+		filterTeamA := bson.M{"team_a": playerName}
+		filterTeamB := bson.M{"team_b": playerName}
+		filter = bson.M{"$or": []bson.M{filterTeamA, filterTeamB}}
+	}
+
+	results, err := collection.Find(ctx, filter)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to retrieve matches: %w", err)
+	}
+
+	var matches []Match
+
+	for results.Next(ctx) {
+		match := Match{}
+		if err := results.Decode(&match); err != nil {
+			return nil, nil, fmt.Errorf("failed to retrieve matches: %w", err)
+		}
+		matches = append(matches, match)
+	}
+
+	if len(matches) == 0 {
+		return nil, nil, ErrNoMatchFound
+	}
+
+	bF, wF := getBestFriendAndWorstFoe(matches, playerName)
+
+	return bF, wF, nil
 }
 
 // --------------------- FUNCTIONS
@@ -696,4 +738,127 @@ func computeAvg(n []float64) float64 {
 	average := sum / float64(len(n))
 
 	return average
+}
+
+// check if a string is contained in a list
+func containsString(list []string, target string) bool {
+	for _, str := range list {
+		if str == target {
+			return true
+		}
+	}
+	return false
+}
+
+// find the string that has the most occurrences in a list and count them
+func findMaxOccurrences(list []string) (string, int) {
+	maxString := ""
+	maxCount := 0
+
+	for _, str := range list {
+		count := countOccurrences(list, str)
+		if count > maxCount {
+			maxString = str
+			maxCount = count
+		}
+	}
+
+	return maxString, maxCount
+}
+
+// count occurrences of a string in a list
+func countOccurrences(list []string, target string) int {
+	count := 0
+	for _, str := range list {
+		if str == target {
+			count++
+		}
+	}
+	return count
+}
+
+// remove all occurrences of a string from a list
+func removeString(list []string, target string) []string {
+	result := make([]string, 0)
+
+	for _, str := range list {
+		if str != target {
+			result = append(result, str)
+		}
+	}
+
+	return result
+}
+
+// find the bestFriend and WorstFoe stats of a given player
+func getBestFriendAndWorstFoe(matches []Match, playerName string) (*Mate, *Mate) {
+	var wonTogether []string
+	var lostAgainst []string
+
+	// for all matches, get all mates won/loss for the given player
+	wonTogether, lostAgainst = getMatesStats(matches, playerName, wonTogether, lostAgainst)
+
+	// find bestFriend: the player with whom the player won more matches when playing together
+	bestFriend, matchCountWon := findMaxOccurrences(wonTogether)
+
+	// find worstFoe: the player with whom the player lost more matches when playing against
+	worstFoe, matchCountLost := findMaxOccurrences(lostAgainst)
+
+	// for bestFriend/worstFoe find total number of matches played together/against
+	matchesWithBestFriend := countOccurrences(append(wonTogether, lostAgainst...), bestFriend)
+	matchesWithWorstFriend := countOccurrences(append(wonTogether, lostAgainst...), worstFoe)
+
+	bF := &Mate{
+		Name:              bestFriend,
+		WonLossCount:      matchCountWon,
+		TotalMatchesCount: matchesWithBestFriend,
+	}
+
+	wF := &Mate{
+		Name:              worstFoe,
+		WonLossCount:      matchCountLost,
+		TotalMatchesCount: matchesWithWorstFriend,
+	}
+
+	return bF, wF
+}
+
+// identifies the lists of other players with whom the given player won/lost
+func getMatesStats(matches []Match, playerName string, wonTogether []string, lostAgainst []string) ([]string, []string) {
+	for _, m := range matches {
+		var friends []string
+		var foes []string
+
+		isWinner := false
+		if containsString(m.TeamA, playerName) {
+			// teamA is friend
+			friends = append(friends, m.TeamA...)
+			foes = append(foes, m.TeamB...)
+			if m.ScoreA > m.ScoreB {
+				isWinner = true
+			}
+			if isWinner {
+				wonTogether = append(wonTogether, m.TeamA...)
+			} else {
+				lostAgainst = append(lostAgainst, m.TeamB...)
+			}
+		} else {
+			// teamB is friend
+			friends = append(friends, m.TeamB...)
+			foes = append(foes, m.TeamA...)
+			if m.ScoreB > m.ScoreA {
+				isWinner = true
+			}
+			if isWinner {
+				wonTogether = append(wonTogether, m.TeamB...)
+			} else {
+				lostAgainst = append(lostAgainst, m.TeamA...)
+			}
+		}
+	}
+
+	// remove playerName from wonTogether list
+	wonTogether = removeString(wonTogether, playerName)
+
+	return wonTogether, lostAgainst
 }
