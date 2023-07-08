@@ -139,6 +139,47 @@ func GetRanking(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"ranking": players})
 }
 
+func GetMates(ctx *gin.Context) {
+	name := ctx.Param("name")
+	sportStr := ctx.Param("sport")
+
+	sport := store.Sport(sportStr)
+	_, ok := store.EnabledSport[sport]
+	if !ok {
+		ctx.JSON(http.StatusNotAcceptable, gin.H{
+			"message": "sport is not enabled",
+		})
+
+		return
+	}
+
+	if store.DBSport == nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "store is not initialized",
+		})
+		return
+	}
+
+	bF, wF, err := store.DBSport.GetMates(ctx, name, sport)
+	if errors.Is(err, store.ErrNoPlayerFound) {
+		ctx.JSON(http.StatusNotFound, gin.H{
+			"message": "no player found",
+		})
+		return
+	}
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"message": "can't get player's mates stats",
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"bestfriend": bF,
+		"worstfoe":   wF,
+	})
+}
+
 func GenerateBalancedTeams(ctx *gin.Context) {
 	sportStr := ctx.Param("sport")
 

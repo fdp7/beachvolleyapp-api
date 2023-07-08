@@ -18,14 +18,16 @@ type SportStore interface {
 	AddMatch(ctx context.Context, match *Match, sport Sport) error
 	GetMatches(ctx context.Context, playerName string, sport Sport) ([]byte, error)
 	DeleteMatch(ctx context.Context, date time.Time, sport Sport) error
-	GenerateBalancedTeams(ctx context.Context, players []Player, sport Sport) ([]string, []string, float64, int, error)
 
 	AddUserToSportDBs(ctx context.Context, user *User) error
 	AddExistingUserToNewSportDBs(ctx context.Context, user *User) error
+
 	AddPlayer(ctx context.Context, player *Player, sport Sport) error
 	GetPlayers(ctx context.Context, sport Sport) ([]byte, error)
 	GetPlayer(ctx context.Context, playerName string, sport Sport) ([]byte, error)
 	GetRanking(ctx context.Context, sport Sport) ([]byte, error)
+	GenerateBalancedTeams(ctx context.Context, players []Player, sport Sport) ([]string, []string, float64, int, error)
+	GetMates(ctx context.Context, playerName string, sport Sport) (*Mate, *Mate, error)
 }
 
 type Sport string

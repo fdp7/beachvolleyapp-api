@@ -49,6 +49,7 @@ func main() {
 
 		secured.GET("/:sport/player/:name", player.GetPlayer)
 		secured.GET("/:sport/player/ranking", player.GetRanking)
+		secured.GET("/:sport/player/:name/mates", player.GetMates)
 	}
 
 	router.Run()
