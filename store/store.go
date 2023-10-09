@@ -11,7 +11,7 @@ import (
 
 type UserStore interface {
 	GetUser(ctx context.Context, userName string) ([]byte, error)
-	AddUser(ctx context.Context, user *User) error
+	AddUser(ctx context.Context, user *UserP) error
 }
 
 type SportStore interface {
@@ -60,18 +60,26 @@ type StoreType int
 
 const (
 	MongoDB StoreType = iota
+	Postgres
 )
 
 func InitializeDB(ctx context.Context, t StoreType) error {
 	switch t {
-	case MongoDB:
-		connectionUri := viper.GetString("CONNECTIONSTRING_MONGODB")
-		dbUser, dbSport, err := NewMongoDBStore(ctx, connectionUri)
+	/*case MongoDB:
+	connectionUri := viper.GetString("CONNECTIONSTRING_MONGODB")
+	dbUser, dbSport, err := NewMongoDBStore(ctx, connectionUri)
+	if err != nil {
+		return fmt.Errorf("failed to initialize mongoDB: %w", err)
+	}
+	DBUser = dbUser
+	DBSport = dbSport*/
+	case Postgres:
+		connectionUri := viper.GetString("CONNECTIONSTRING_POSTGRES")
+		dbUser, err := NewPostgresStore(ctx, connectionUri)
 		if err != nil {
-			return fmt.Errorf("failed to initialize mongoDB: %w", err)
+			return fmt.Errorf("failed to initialize posgres: %w", err)
 		}
 		DBUser = dbUser
-		DBSport = dbSport
 
 	default:
 		return errors.New("unknown DB type")
@@ -101,4 +109,11 @@ type User struct {
 	ID       string `json:"_id" bson:"_id"`
 	Name     string `json:"name" bson:"name"`
 	Password string `json:"password" bson:"password"`
+}
+
+type UserP struct {
+	ID       string `json:"Id"`
+	Name     string `json:"Name"`
+	Password string `json:"Password"`
+	Email    string `json:"Email"`
 }

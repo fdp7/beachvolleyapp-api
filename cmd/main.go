@@ -25,7 +25,11 @@ func main() {
 		log.Println("application will run without configurations from config file")
 	}
 
-	if err := store.InitializeDB(ctx, store.MongoDB); err != nil {
+	/*if err := store.InitializeDB(ctx, store.MongoDB); err != nil {
+		log.Fatalf("failed to initialize DB: %s", err.Error())
+	}*/
+
+	if err := store.InitializeDB(ctx, store.Postgres); err != nil {
 		log.Fatalf("failed to initialize DB: %s", err.Error())
 	}
 
