@@ -109,7 +109,7 @@ func UserToStoreUser(u *User) *store.User {
 
 func UserToStoreUserP(u *UserP) *store.UserP {
 	return &store.UserP{
-		ID:       u.ID,
+		Id:       u.Id,
 		Name:     u.Name,
 		Password: u.Password,
 		Email:    u.Email,

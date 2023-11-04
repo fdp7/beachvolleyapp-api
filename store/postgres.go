@@ -29,7 +29,7 @@ func (s *PostgresStore) GetUser(ctx context.Context, userName string) ([]byte, e
 
 	user := &UserP{}
 
-	err := s.client.QueryRow(ctx, `SELECT * FROM "User" WHERE "Name" = $1`, userName).Scan(&user.ID, &user.Name, &user.Password, &user.Email)
+	err := s.client.QueryRow(ctx, `SELECT * FROM "User" WHERE "Name" = $1`, userName).Scan(&user.Id, &user.Name, &user.Password, &user.Email)
 	if err != nil {
 		return nil, ErrNoUserFound
 	}
@@ -51,4 +51,19 @@ func (s *PostgresStore) AddUser(ctx context.Context, u *UserP) error {
 		return fmt.Errorf("failed to add user to db: %w", err)
 	}
 	return nil
+}
+
+func (s *PostgresStore) GetPlayers(ctx context.Context, sport SportP, league League) ([]byte, error) {
+
+	// get all players ordered by alphabetical name for given league and sport
+	players := &UserStats{}
+
+	err := s.client.QueryRow(ctx, `SELECT * FROM "UserStats" as us inner join "User" as u WHERE "SportId" = $1 and "LeagueId" = $2`, sport.Id, league.Id).
+		Scan(&players.Id, &players.Name, &players.UserId, &players.SportId, &players.MatchCount, &players.WinCount, &players.Elo)
+
+	if err != nil {
+		return nil, ErrNoPlayerFound
+	}
+
+	return json.Marshal(players)
 }

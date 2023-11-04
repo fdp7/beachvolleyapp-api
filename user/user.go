@@ -7,7 +7,7 @@ type User struct {
 }
 
 type UserP struct {
-	ID       string `json:"Id"`
+	Id       int    `json:"Id"`
 	Name     string `json:"Name"`
 	Password string `json:"Password"`
 	Email    string `json:"Email"`

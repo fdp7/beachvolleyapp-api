@@ -11,7 +11,7 @@ import (
 
 type UserStore interface {
 	GetUser(ctx context.Context, userName string) ([]byte, error)
-	AddUser(ctx context.Context, user *UserP) error
+	AddUser(ctx context.Context, user *User) error
 }
 
 type SportStore interface {
@@ -30,6 +30,13 @@ type SportStore interface {
 	GetMates(ctx context.Context, playerName string, sport Sport) (*Mate, *Mate, error)
 }
 
+type SqlDbStore interface {
+	GetUser(ctx context.Context, userName string) ([]byte, error)
+	AddUser(ctx context.Context, user *UserP) error
+
+	GetPlayers(ctx context.Context, sport SportP, league League) ([]byte, error)
+}
+
 type Sport string
 
 const (
@@ -46,6 +53,7 @@ var EnabledSport = map[Sport]struct{}{
 
 var DBUser UserStore
 var DBSport SportStore
+var DBSql SqlDbStore
 
 var (
 	ErrNoUserFound      = errors.New("no user found")
@@ -79,7 +87,7 @@ func InitializeDB(ctx context.Context, t StoreType) error {
 		if err != nil {
 			return fmt.Errorf("failed to initialize posgres: %w", err)
 		}
-		DBUser = dbUser
+		DBSql = dbUser
 
 	default:
 		return errors.New("unknown DB type")
@@ -87,6 +95,8 @@ func InitializeDB(ctx context.Context, t StoreType) error {
 
 	return nil
 }
+
+//---------------------------------------------------------------------- MongoDB classes
 
 type Match struct {
 	TeamA  []string  `json:"team_a" bson:"team_a"`
@@ -111,9 +121,54 @@ type User struct {
 	Password string `json:"password" bson:"password"`
 }
 
+//---------------------------------------------------------------------- PostgresSQL classes
+
 type UserP struct {
-	ID       string `json:"Id"`
+	Id       int    `json:"Id"`
 	Name     string `json:"Name"`
 	Password string `json:"Password"`
 	Email    string `json:"Email"`
+}
+
+type UserStats struct {
+	Id         int       `json:"Id"`
+	Name       string    `json:"Name"`
+	UserId     int       `json:"UserId"`
+	SportId    int       `json:"SportId"`
+	MatchCount int       `json:"MatchCount"`
+	WinCount   int       `json:"WinCount"`
+	Elo        []float64 `json:"Elo"`
+}
+
+type UserMatch struct {
+	Id      int `json:"Id"`
+	UserId  int `json:"UserId"`
+	MatchId int `json:"MatchId"`
+}
+
+type UserLeague struct {
+	Id       int `json:"Id"`
+	UserId   int `json:"UserId"`
+	LeagueId int `json:"LeagueId"`
+}
+
+type SportP struct {
+	Id   int    `json:"Id"`
+	Name string `json:"Name"`
+}
+
+type MatchP struct {
+	Id       int       `json:"Id"`
+	SportId  int       `json:"SportId"`
+	LeagueId int       `json:"LeagueId"`
+	TeamA    []int     `json:"TeamA"`
+	TeamB    []int     `json:"TeamB"`
+	ScoreA   int       `json:"ScoreA"`
+	ScoreB   int       `json:"ScoreB"`
+	Date     time.Time `json:"Date"`
+}
+
+type League struct {
+	Id   int    `json:"Id"`
+	Name string `json:"Name"`
 }

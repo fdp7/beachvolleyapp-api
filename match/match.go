@@ -9,3 +9,14 @@ type Match struct {
 	ScoreB int       `json:"score_b"`
 	Date   time.Time `json:"date"`
 }
+
+type MatchP struct {
+	Id       int       `json:"Id"`
+	SportId  int       `json:"SportId"`
+	LeagueId int       `json:"LeagueId"`
+	TeamA    []int     `json:"TeamA"`
+	TeamB    []int     `json:"TeamB"`
+	ScoreA   int       `json:"ScoreA"`
+	ScoreB   int       `json:"ScoreB"`
+	Date     time.Time `json:"Date"`
+}
