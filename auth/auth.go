@@ -107,7 +107,8 @@ func GenerateToken(ctx *gin.Context) {
 		return
 	}
 
-	u := &user.User{}
+	//u := &user.User{}
+	u := &user.UserP{}
 	if err := json.Unmarshal(record, u); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "failed to unmarshal user",
@@ -131,8 +132,8 @@ func GenerateToken(ctx *gin.Context) {
 	}
 
 	// add user to player collections for sports created after user registration
-	storeUser := user.UserToStoreUser(u)
-	err = store.DBSport.AddExistingUserToNewSportDBs(ctx, storeUser)
+	//storeUser := user.UserToStoreUserP(u)
+	//err = store.DBSport.AddExistingUserToNewSportDBs(ctx, storeUser)
 	ctx.JSON(http.StatusOK, gin.H{"token": tokenString})
 }
 

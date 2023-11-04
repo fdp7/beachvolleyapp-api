@@ -10,7 +10,7 @@ import (
 	"github.com/fdp7/beachvolleyapp-api/store"
 )
 
-func HashPassword(user *User) error {
+func HashPassword(user *UserP) error {
 	bytes, err := bcrypt.GenerateFromPassword([]byte(user.Password), 1)
 	if err != nil {
 		return nil
@@ -19,7 +19,7 @@ func HashPassword(user *User) error {
 	return nil
 }
 
-func CheckPassword(user *User, providedPassword string) error {
+func CheckPassword(user *UserP, providedPassword string) error {
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(providedPassword)); err != nil {
 		return err
 	}
@@ -34,7 +34,7 @@ func RegisterUser(ctx *gin.Context) {
 		return
 	}
 
-	user := &User{}
+	user := &UserP{}
 	if err := ctx.BindJSON(user); err != nil {
 		return
 	}
@@ -47,7 +47,7 @@ func RegisterUser(ctx *gin.Context) {
 		return
 	}
 
-	storeUser := UserToStoreUser(user)
+	storeUser := UserToStoreUserP(user)
 
 	//check duplicate name, then add new user
 	u, err := store.DBUser.GetUser(ctx, storeUser.Name)
@@ -79,7 +79,7 @@ func RegisterUser(ctx *gin.Context) {
 		return
 	}
 
-	err = store.DBSport.AddUserToSportDBs(ctx, storeUser)
+	/*err = store.DBSport.AddUserToSportDBs(ctx, storeUser)
 	if errors.Is(err, store.ErrPlayerDuplicated) {
 		ctx.JSON(http.StatusForbidden, gin.H{
 			"message": "player already exist",
@@ -93,7 +93,7 @@ func RegisterUser(ctx *gin.Context) {
 		})
 
 		return
-	}
+	}*/
 
 	ctx.JSON(http.StatusCreated, gin.H{})
 
@@ -104,5 +104,14 @@ func UserToStoreUser(u *User) *store.User {
 		ID:       u.ID,
 		Name:     u.Name,
 		Password: u.Password,
+	}
+}
+
+func UserToStoreUserP(u *UserP) *store.UserP {
+	return &store.UserP{
+		ID:       u.ID,
+		Name:     u.Name,
+		Password: u.Password,
+		Email:    u.Email,
 	}
 }
