@@ -27,7 +27,7 @@ func CheckPassword(user *UserP, providedPassword string) error {
 }
 
 func RegisterUser(ctx *gin.Context) {
-	if store.DBUser == nil {
+	if store.DBSql == nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "store is not initialized",
 		})
@@ -50,11 +50,11 @@ func RegisterUser(ctx *gin.Context) {
 	storeUser := UserToStoreUserP(user)
 
 	//check duplicate name, then add new user
-	u, err := store.DBUser.GetUser(ctx, storeUser.Name)
+	u, err := store.DBSql.GetUser(ctx, storeUser.Name)
 
 	if errors.Is(err, store.ErrNoUserFound) {
 
-		err = store.DBUser.AddUser(ctx, storeUser)
+		err = store.DBSql.AddUser(ctx, storeUser)
 
 		if errors.Is(err, store.ErrUserDuplicated) {
 			ctx.JSON(http.StatusForbidden, gin.H{

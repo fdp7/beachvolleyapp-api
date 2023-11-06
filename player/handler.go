@@ -11,9 +11,12 @@ import (
 )
 
 func GetPlayers(ctx *gin.Context) {
-	sportStr := ctx.Param("sport")
+	//sportStr := ctx.Param("sport")
 
-	sport := store.Sport(sportStr)
+	leagueId := ctx.Param("leagueId")
+	sportId := ctx.Param("sportId")
+
+	/*sport := store.Sport(sportStr)
 	_, ok := store.EnabledSport[sport]
 
 	if !ok {
@@ -21,9 +24,9 @@ func GetPlayers(ctx *gin.Context) {
 			"message": "sport is not enabled",
 		})
 		return
-	}
+	}*/
 
-	if store.DBSport == nil {
+	if store.DBSql == nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "store is not initialized",
 		})
@@ -31,7 +34,7 @@ func GetPlayers(ctx *gin.Context) {
 		return
 	}
 
-	result, err := store.DBSport.GetPlayers(ctx, sport)
+	result, err := store.DBSql.GetPlayers(ctx, leagueId, sportId)
 	if errors.Is(err, store.ErrNoPlayerFound) {
 		ctx.JSON(http.StatusNotFound, gin.H{
 			"message": "failed to retrieve players",
@@ -40,7 +43,7 @@ func GetPlayers(ctx *gin.Context) {
 		return
 	}
 
-	players := &[]Player{}
+	players := &[]PlayerP{}
 
 	if err := json.Unmarshal(result, players); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
@@ -53,9 +56,12 @@ func GetPlayers(ctx *gin.Context) {
 }
 
 func GetPlayer(ctx *gin.Context) {
-	name := ctx.Param("name")
-	sportStr := ctx.Param("sport")
 
+	leagueId := ctx.Param("leagueId")
+	sportId := ctx.Param("sportId")
+	name := ctx.Param("name")
+
+	/*sportStr := ctx.Param("sport")
 	sport := store.Sport(sportStr)
 	_, ok := store.EnabledSport[sport]
 	if !ok {
@@ -64,16 +70,16 @@ func GetPlayer(ctx *gin.Context) {
 		})
 
 		return
-	}
+	}*/
 
-	if store.DBSport == nil {
+	if store.DBSql == nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "store is not initialized",
 		})
 		return
 	}
 
-	result, err := store.DBSport.GetPlayer(ctx, name, sport)
+	result, err := store.DBSql.GetPlayer(ctx, leagueId, sportId, name)
 	if errors.Is(err, store.ErrNoPlayerFound) {
 		ctx.JSON(http.StatusNotFound, gin.H{
 			"message": "no player found",
@@ -87,7 +93,7 @@ func GetPlayer(ctx *gin.Context) {
 		return
 	}
 
-	player := &Player{}
+	player := &PlayerP{}
 
 	if err := json.Unmarshal(result, player); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
@@ -99,18 +105,22 @@ func GetPlayer(ctx *gin.Context) {
 }
 
 func GetRanking(ctx *gin.Context) {
-	sportStr := ctx.Param("sport")
 
-	sport := store.Sport(sportStr)
-	_, ok := store.EnabledSport[sport]
-	if !ok {
-		ctx.JSON(http.StatusNotAcceptable, gin.H{
-			"message": "sport is not enabled",
-		})
-		return
-	}
+	leagueId := ctx.Param("leagueId")
+	sportId := ctx.Param("sportId")
 
-	if store.DBSport == nil {
+	/*
+		sportStr := ctx.Param("sport")
+		sport := store.Sport(sportStr)
+		_, ok := store.EnabledSport[sport]
+		if !ok {
+			ctx.JSON(http.StatusNotAcceptable, gin.H{
+				"message": "sport is not enabled",
+			})
+			return
+		}*/
+
+	if store.DBSql == nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "store is not initialized",
 		})
@@ -118,7 +128,7 @@ func GetRanking(ctx *gin.Context) {
 		return
 	}
 
-	result, err := store.DBSport.GetRanking(ctx, sport)
+	result, err := store.DBSql.GetRanking(ctx, leagueId, sportId)
 	if errors.Is(err, store.ErrNoPlayerFound) {
 		ctx.JSON(http.StatusNotFound, gin.H{
 			"message": "ranking is empty",
@@ -127,7 +137,7 @@ func GetRanking(ctx *gin.Context) {
 		return
 	}
 
-	players := &[]Player{}
+	players := &[]PlayerP{}
 
 	if err := json.Unmarshal(result, players); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
@@ -140,9 +150,10 @@ func GetRanking(ctx *gin.Context) {
 }
 
 func GetMates(ctx *gin.Context) {
-	name := ctx.Param("name")
-	sportStr := ctx.Param("sport")
 
+	name := ctx.Param("name")
+
+	sportStr := ctx.Param("sport")
 	sport := store.Sport(sportStr)
 	_, ok := store.EnabledSport[sport]
 	if !ok {

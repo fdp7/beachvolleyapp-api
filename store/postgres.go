@@ -29,7 +29,11 @@ func (s *PostgresStore) GetUser(ctx context.Context, userName string) ([]byte, e
 
 	user := &UserP{}
 
-	err := s.client.QueryRow(ctx, `SELECT * FROM "User" WHERE "Name" = $1`, userName).Scan(&user.Id, &user.Name, &user.Password, &user.Email)
+	query := `SELECT * FROM "User" WHERE "Name" = $1`
+
+	err := s.client.QueryRow(ctx, query, userName).
+		Scan(&user.Id, &user.Name, &user.Password, &user.Email)
+
 	if err != nil {
 		return nil, ErrNoUserFound
 	}
@@ -39,11 +43,12 @@ func (s *PostgresStore) GetUser(ctx context.Context, userName string) ([]byte, e
 
 func (s *PostgresStore) AddUser(ctx context.Context, u *UserP) error {
 
-	err := s.client.QueryRow(ctx, `INSERT INTO "User" ("Id", "Name", "Password", "Email") VALUES ($u.Name, $u.Password, $u.Email)`)
+	query := `INSERT INTO "User" ("Id", "Name", "Password", "Email") VALUES ($u.Name, $u.Password, $u.Email)
+			on conflict ("Name") do nothing
+            returning "Id"`
 
-	/*if mongo.IsDuplicateKeyError(err) {
-		return ErrUserDuplicated
-	}*/
+	err := s.client.QueryRow(ctx, query)
+
 	if len(u.Name) < 2 || len(u.Name) >= 11 {
 		return ErrNotValidName
 	}
@@ -53,17 +58,188 @@ func (s *PostgresStore) AddUser(ctx context.Context, u *UserP) error {
 	return nil
 }
 
-func (s *PostgresStore) GetPlayers(ctx context.Context, sport SportP, league League) ([]byte, error) {
+func (s *PostgresStore) GetPlayers(ctx context.Context, leagueId string, sportId string) ([]byte, error) {
 
 	// get all players ordered by alphabetical name for given league and sport
-	players := &UserStats{}
+	var players []PlayerP
 
-	err := s.client.QueryRow(ctx, `SELECT * FROM "UserStats" as us inner join "User" as u WHERE "SportId" = $1 and "LeagueId" = $2`, sport.Id, league.Id).
-		Scan(&players.Id, &players.Name, &players.UserId, &players.SportId, &players.MatchCount, &players.WinCount, &players.Elo)
+	query := `SELECT  u."Id", us."UserId", u."Name", us."LeagueId", us."SportId", us."MatchCount", us."WinCount", us."Elo"
+			 FROM "UserStats" as us
+			 inner join "User" as u on us."UserId" = u."Id"
+			 WHERE us."LeagueId" = $1 and us."SportId" = $2
+			 order by u."Name" asc`
+
+	rows, err := s.client.Query(ctx, query, leagueId, sportId)
 
 	if err != nil {
 		return nil, ErrNoPlayerFound
 	}
 
-	return json.Marshal(players)
+	defer rows.Close()
+
+	for rows.Next() {
+		var player PlayerP
+		err := rows.Scan(
+			&player.UserStats.Id,
+			&player.UserStats.UserId,
+			&player.Name,
+			&player.UserStats.LeagueId,
+			&player.UserStats.SportId,
+			&player.UserStats.MatchCount,
+			&player.UserStats.WinCount,
+			&player.UserStats.Elo,
+		)
+		if err != nil {
+			return nil, ErrNoPlayerFound
+		}
+		players = append(players, player)
+	}
+
+	return json.Marshal(&players)
+}
+
+func (s *PostgresStore) GetPlayer(ctx context.Context, leagueId string, sportId string, userId string) ([]byte, error) {
+
+	// get player with given name for given league and sport
+	var player PlayerP
+
+	query := `SELECT  u."Id", us."UserId", u."Name", us."LeagueId", us."SportId", us."MatchCount", us."WinCount", us."Elo"
+			 FROM "UserStats" as us
+			 inner join "User" as u on us."UserId" = u."Id"
+			 WHERE us."LeagueId" = $1 and us."SportId" = $2 and us."UserId" = $3`
+
+	err := s.client.QueryRow(ctx, query, leagueId, sportId, userId).
+		Scan(
+			&player.UserStats.Id,
+			&player.UserStats.UserId,
+			&player.Name,
+			&player.UserStats.LeagueId,
+			&player.UserStats.SportId,
+			&player.UserStats.MatchCount,
+			&player.UserStats.WinCount,
+			&player.UserStats.Elo,
+		)
+
+	if err != nil {
+		return nil, ErrNoPlayerFound
+	}
+
+	return json.Marshal(&player)
+}
+
+func (s *PostgresStore) GetRanking(ctx context.Context, leagueId string, sportId string) ([]byte, error) {
+
+	// get all players with at least 1 match played, ordered by max(elo), max(win count) and min(match count) and alphabetical(name)
+	var players []PlayerP
+
+	query := `SELECT  u."Id", us."UserId", u."Name", us."LeagueId", us."SportId", us."MatchCount", us."WinCount", us."Elo"
+			 FROM "UserStats" as us
+			 inner join "User" as u on us."UserId" = u."Id"
+			 WHERE us."LeagueId" = $1 and us."SportId" = $2 and us."MatchCount" >= 1
+			 order by us."Elo"[array_upper(us."Elo", 1)] desc, us."WinCount" desc, us."MatchCount" asc, u."Name" asc`
+
+	rows, err := s.client.Query(ctx, query, leagueId, sportId)
+
+	if err != nil {
+		return nil, ErrNoPlayerFound
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var player PlayerP
+		err := rows.Scan(
+			&player.UserStats.Id,
+			&player.UserStats.UserId,
+			&player.Name,
+			&player.UserStats.LeagueId,
+			&player.UserStats.SportId,
+			&player.UserStats.MatchCount,
+			&player.UserStats.WinCount,
+			&player.UserStats.Elo,
+		)
+		if err != nil {
+			return nil, ErrNoPlayerFound
+		}
+		players = append(players, player)
+	}
+
+	return json.Marshal(&players)
+}
+
+/*func (s *PostgresStore) GetFriendNFoe(ctx context.Context, leagueId string, sportId string, name string) (*FriendNFoe, error){
+}*/
+
+func (s *PostgresStore) GetMatches(ctx context.Context, leagueId string, sportId string, userId string) ([]byte, error) {
+
+	// get all, ordered by descending date, limit number of samples, with query filters
+	var matches []MatchPV2
+
+	var query string
+
+	if userId != "" {
+		query = `SELECT  m."Id", m."LeagueId", m."SportId",
+					ARRAY(
+						SELECT u."Name"
+						FROM "User" AS u
+						WHERE u."Id" = ANY(m."TeamA")
+					) AS "TeamA_Names",
+					ARRAY(
+						SELECT u."Name"
+						FROM "User" AS u
+						WHERE u."Id" = ANY(m."TeamB")
+					) AS "TeamB_Names",
+					m."ScoreA", m."ScoreB", m."Date"
+				 FROM "Match" as m
+				 WHERE m."LeagueId" = $1 and m."SportId" = $2 and ($3 = ANY(m."TeamA") OR $3 = ANY(m."TeamB"))
+				 order by m."Date" asc`
+	} else {
+		query = `SELECT  m."Id", m."LeagueId", m."SportId",
+					ARRAY(
+						SELECT u."Name"
+						FROM "User" AS u
+						WHERE u."Id" = ANY(m."TeamA")
+					) AS "TeamA_Names",
+					ARRAY(
+						SELECT u."Name"
+						FROM "User" AS u
+						WHERE u."Id" = ANY(m."TeamB")
+					) AS "TeamB_Names",
+					m."ScoreA", m."ScoreB", m."Date"
+				 FROM "Match" as m
+				 WHERE m."LeagueId" = $1 and m."SportId" = $2
+				 order by m."Date" asc`
+	}
+
+	rows, err := s.client.Query(ctx, query, leagueId, sportId, userId)
+
+	if err != nil {
+		return nil, ErrNoMatchFound
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var match MatchPV2
+		err := rows.Scan(
+			&match.Id,
+			&match.LeagueId,
+			&match.SportId,
+			&match.TeamA,
+			&match.TeamB,
+			&match.ScoreA,
+			&match.ScoreB,
+			&match.Date,
+		)
+		if err != nil {
+			return nil, ErrNoMatchFound
+		}
+		matches = append(matches, match)
+	}
+
+	if len(matches) == 0 {
+		return nil, ErrNoMatchFound
+	}
+
+	return json.Marshal(matches)
 }

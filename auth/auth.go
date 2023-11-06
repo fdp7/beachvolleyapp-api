@@ -86,14 +86,14 @@ func GenerateToken(ctx *gin.Context) {
 		return
 	}
 
-	if store.DBUser == nil {
+	if store.DBSql == nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "store is not initialized",
 		})
 		return
 	}
 
-	record, err := store.DBUser.GetUser(ctx, request.Name)
+	record, err := store.DBSql.GetUser(ctx, request.Name)
 	if errors.Is(err, store.ErrNoUserFound) || len(record) == 0 {
 		ctx.JSON(http.StatusNotFound, gin.H{
 			"message": "no user found",

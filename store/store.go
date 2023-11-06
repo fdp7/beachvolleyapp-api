@@ -34,7 +34,13 @@ type SqlDbStore interface {
 	GetUser(ctx context.Context, userName string) ([]byte, error)
 	AddUser(ctx context.Context, user *UserP) error
 
-	GetPlayers(ctx context.Context, sport SportP, league League) ([]byte, error)
+	GetPlayers(ctx context.Context, leagueId string, sportId string) ([]byte, error)
+	GetPlayer(ctx context.Context, leagueId string, sportId string, userId string) ([]byte, error)
+	GetRanking(ctx context.Context, leagueId string, sportId string) ([]byte, error)
+	//GetFriendNFoe(ctx context.Context, leagueId string, sportId string, name string) (*FriendNFoe, error)
+	//GenerateBalancedTeams(ctx context.Context, players []Player, sport Sport) ([]string, []string, float64, int, error)
+
+	GetMatches(ctx context.Context, leagueId string, sportId string, userId string) ([]byte, error)
 }
 
 type Sport string
@@ -132,8 +138,8 @@ type UserP struct {
 
 type UserStats struct {
 	Id         int       `json:"Id"`
-	Name       string    `json:"Name"`
 	UserId     int       `json:"UserId"`
+	LeagueId   int       `json:"LeagueId"`
 	SportId    int       `json:"SportId"`
 	MatchCount int       `json:"MatchCount"`
 	WinCount   int       `json:"WinCount"`
@@ -171,4 +177,33 @@ type MatchP struct {
 type League struct {
 	Id   int    `json:"Id"`
 	Name string `json:"Name"`
+}
+
+//---------------------------------------------------------------------- other classes
+
+type PlayerP struct {
+	Name      string `json:"Name"`
+	UserStats UserStats
+}
+
+type MatchPV2 struct {
+	Id       int       `json:"Id"`
+	SportId  int       `json:"SportId"`
+	LeagueId int       `json:"LeagueId"`
+	TeamA    []string  `json:"TeamA"`
+	TeamB    []string  `json:"TeamB"`
+	ScoreA   int       `json:"ScoreA"`
+	ScoreB   int       `json:"ScoreB"`
+	Date     time.Time `json:"Date"`
+}
+
+type Mate struct {
+	Name              string `json:"name"`
+	WonLossCount      int    `json:"won_loss_count"`
+	TotalMatchesCount int    `json:"total_matches_count"`
+}
+
+type FriendNFoe struct {
+	BestFriend Mate `json:"bestfriend"`
+	WorstFoe   Mate `json:"worstfoe"`
 }

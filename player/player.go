@@ -12,8 +12,14 @@ type Player struct {
 type UserStats struct {
 	Id         int       `json:"Id"`
 	UserId     int       `json:"UserId"`
+	LeagueId   int       `json:"LeagueId"`
 	SportId    int       `json:"SportId"`
 	MatchCount int       `json:"MatchCount"`
 	WinCount   int       `json:"WinCount"`
 	Elo        []float64 `json:"Elo"`
+}
+
+type PlayerP struct {
+	Name      string `json:"Name"`
+	UserStats UserStats
 }

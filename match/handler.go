@@ -56,19 +56,23 @@ func AddMatch(ctx *gin.Context) {
 }
 
 func GetMatches(ctx *gin.Context) {
-	sportStr := ctx.Param("sport")
 
-	sport := store.Sport(sportStr)
-	_, ok := store.EnabledSport[sport]
-	if !ok {
-		ctx.JSON(http.StatusNotAcceptable, gin.H{
-			"message": "sport is not enabled",
-		})
+	leagueId := ctx.Param("leagueId")
+	sportId := ctx.Param("sportId")
 
-		return
-	}
+	/*
+		sportStr := ctx.Param("sport")
+		sport := store.Sport(sportStr)
+		_, ok := store.EnabledSport[sport]
+		if !ok {
+			ctx.JSON(http.StatusNotAcceptable, gin.H{
+				"message": "sport is not enabled",
+			})
 
-	if store.DBSport == nil {
+			return
+		}*/
+
+	if store.DBSql == nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "store is not initialized",
 		})
@@ -76,9 +80,9 @@ func GetMatches(ctx *gin.Context) {
 		return
 	}
 
-	player := ctx.Request.URL.Query().Get(playerQueryParam)
+	userId := ctx.Request.URL.Query().Get(playerQueryParam)
 
-	result, err := store.DBSport.GetMatches(ctx, player, sport)
+	result, err := store.DBSql.GetMatches(ctx, leagueId, sportId, userId)
 	if errors.Is(err, store.ErrNoMatchFound) {
 		ctx.JSON(http.StatusNotFound, gin.H{
 			"message": "no match found",
@@ -94,7 +98,7 @@ func GetMatches(ctx *gin.Context) {
 		return
 	}
 
-	matches := &[]Match{}
+	matches := &[]MatchPV2{}
 
 	if err := json.Unmarshal(result, matches); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{

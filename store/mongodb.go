@@ -28,12 +28,6 @@ type MongoUserStore struct {
 	userCollection string
 }
 
-type Mate struct {
-	Name              string `json:"name"`
-	WonLossCount      int    `json:"won_loss_count"`
-	TotalMatchesCount int    `json:"total_matches_count"`
-}
-
 func NewMongoDBStore(ctx context.Context, connectionURI string) (*MongoUserStore, *MongoSportStore, error) {
 	client, err := mongo.Connect(ctx, options.Client().ApplyURI(connectionURI))
 	if err != nil {

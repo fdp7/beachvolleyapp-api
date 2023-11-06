@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
+	"github.com/fdp7/beachvolleyapp-api/match"
 	"log"
 
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/viper"
 
 	"github.com/fdp7/beachvolleyapp-api/auth"
-	"github.com/fdp7/beachvolleyapp-api/match"
 	"github.com/fdp7/beachvolleyapp-api/player"
 	"github.com/fdp7/beachvolleyapp-api/store"
 	"github.com/fdp7/beachvolleyapp-api/user"
@@ -35,11 +35,14 @@ func main() {
 
 	router := gin.Default()
 
+	// the same for MongoDB and PostgreSql
 	router.POST("/user/signup", user.RegisterUser)
 	router.POST("/user/login", auth.GenerateToken)
 
 	// in secured all api that must be checked using a valid token
-	secured := router.Use(auth.Auth())
+
+	//MongoDB API
+	/*secured := router.Use(auth.Auth())
 	{
 		// MATCH
 		secured.GET("/:sport/matches", match.GetMatches)
@@ -54,6 +57,17 @@ func main() {
 		secured.GET("/:sport/player/:name", player.GetPlayer)
 		secured.GET("/:sport/player/ranking", player.GetRanking)
 		secured.GET("/:sport/player/:name/mates", player.GetMates)
+	}*/
+
+	// PostgreSql API
+	secured := router.Use(auth.Auth())
+	{
+		secured.GET("/:leagueId/:sportId/players", player.GetPlayers)
+		secured.GET("/:leagueId/:sportId/players/:name", player.GetPlayer)
+		secured.GET("/:leagueId/:sportId/players/ranking", player.GetRanking)
+		secured.GET("/:leagueId/:sportId/players/:name/mates", player.GetMates)
+		secured.POST("/:leagueId/:sportId/players/balanceTeams", player.GenerateBalancedTeams)
+		secured.GET("/:leagueId/:sportId/matches", match.GetMatches)
 	}
 
 	router.Run()
