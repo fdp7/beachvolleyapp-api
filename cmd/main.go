@@ -68,6 +68,7 @@ func main() {
 		secured.GET("/:leagueId/:sportId/players/:name/mates", player.GetMates)
 		secured.POST("/:leagueId/:sportId/players/balanceTeams", player.GenerateBalancedTeams)
 		secured.GET("/:leagueId/:sportId/matches", match.GetMatches)
+		secured.POST("/:leagueId/:sportId/match", match.AddMatch)
 	}
 
 	router.Run()

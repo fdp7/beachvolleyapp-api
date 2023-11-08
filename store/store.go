@@ -35,12 +35,13 @@ type SqlDbStore interface {
 	AddUser(ctx context.Context, user *UserP) error
 
 	GetPlayers(ctx context.Context, leagueId string, sportId string) ([]byte, error)
-	GetPlayer(ctx context.Context, leagueId string, sportId string, userId string) ([]byte, error)
+	GetPlayer(ctx context.Context, leagueId string, sportId string, name string) ([]byte, error)
 	GetRanking(ctx context.Context, leagueId string, sportId string) ([]byte, error)
 	//GetFriendNFoe(ctx context.Context, leagueId string, sportId string, name string) (*FriendNFoe, error)
 	//GenerateBalancedTeams(ctx context.Context, players []Player, sport Sport) ([]string, []string, float64, int, error)
 
-	GetMatches(ctx context.Context, leagueId string, sportId string, userId string) ([]byte, error)
+	GetMatches(ctx context.Context, leagueId string, sportId string, name string) ([]byte, error)
+	AddMatch(ctx context.Context, m *MatchP) error
 }
 
 type Sport string
@@ -167,8 +168,8 @@ type MatchP struct {
 	Id       int       `json:"Id"`
 	SportId  int       `json:"SportId"`
 	LeagueId int       `json:"LeagueId"`
-	TeamA    []int     `json:"TeamA"`
-	TeamB    []int     `json:"TeamB"`
+	TeamA    []string  `json:"TeamA"`
+	TeamB    []string  `json:"TeamB"`
 	ScoreA   int       `json:"ScoreA"`
 	ScoreB   int       `json:"ScoreB"`
 	Date     time.Time `json:"Date"`
@@ -184,17 +185,6 @@ type League struct {
 type PlayerP struct {
 	Name      string `json:"Name"`
 	UserStats UserStats
-}
-
-type MatchPV2 struct {
-	Id       int       `json:"Id"`
-	SportId  int       `json:"SportId"`
-	LeagueId int       `json:"LeagueId"`
-	TeamA    []string  `json:"TeamA"`
-	TeamB    []string  `json:"TeamB"`
-	ScoreA   int       `json:"ScoreA"`
-	ScoreB   int       `json:"ScoreB"`
-	Date     time.Time `json:"Date"`
 }
 
 type Mate struct {

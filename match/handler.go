@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -17,8 +18,11 @@ const (
 )
 
 func AddMatch(ctx *gin.Context) {
-	sportStr := ctx.Param("sport")
 
+	leagueId := ctx.Param("leagueId")
+	sportId := ctx.Param("sportId")
+
+	/*sportStr := ctx.Param("sport")
 	sport := store.Sport(sportStr)
 	_, ok := store.EnabledSport[sport]
 	if !ok {
@@ -26,9 +30,9 @@ func AddMatch(ctx *gin.Context) {
 			"message": "sport is not enabled",
 		})
 		return
-	}
+	}*/
 
-	if store.DBSport == nil {
+	if store.DBSql == nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "store is not initialized",
 		})
@@ -44,9 +48,9 @@ func AddMatch(ctx *gin.Context) {
 		return
 	}
 
-	storeMatch := matchToStoreMatch(match)
+	storeMatch := matchToStoreMatchP(leagueId, sportId, match)
 
-	err := store.DBSport.AddMatch(ctx, storeMatch, sport)
+	err := store.DBSql.AddMatch(ctx, storeMatch)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "failed to add match",
@@ -80,9 +84,9 @@ func GetMatches(ctx *gin.Context) {
 		return
 	}
 
-	userId := ctx.Request.URL.Query().Get(playerQueryParam)
+	name := ctx.Request.URL.Query().Get(playerQueryParam)
 
-	result, err := store.DBSql.GetMatches(ctx, leagueId, sportId, userId)
+	result, err := store.DBSql.GetMatches(ctx, leagueId, sportId, name)
 	if errors.Is(err, store.ErrNoMatchFound) {
 		ctx.JSON(http.StatusNotFound, gin.H{
 			"message": "no match found",
@@ -98,7 +102,7 @@ func GetMatches(ctx *gin.Context) {
 		return
 	}
 
-	matches := &[]MatchPV2{}
+	matches := &[]MatchP{}
 
 	if err := json.Unmarshal(result, matches); err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
@@ -163,5 +167,21 @@ func matchToStoreMatch(m *Match) *store.Match {
 		ScoreA: m.ScoreA,
 		ScoreB: m.ScoreB,
 		Date:   m.Date,
+	}
+}
+
+func matchToStoreMatchP(leagueId string, sportId string, m *Match) *store.MatchP {
+
+	sportIdInt, _ := strconv.Atoi(sportId)
+	leagueIdInt, _ := strconv.Atoi(leagueId)
+
+	return &store.MatchP{
+		SportId:  sportIdInt,
+		LeagueId: leagueIdInt,
+		TeamA:    m.TeamA,
+		TeamB:    m.TeamB,
+		ScoreA:   m.ScoreA,
+		ScoreB:   m.ScoreB,
+		Date:     m.Date,
 	}
 }

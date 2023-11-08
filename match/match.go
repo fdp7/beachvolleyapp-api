@@ -14,17 +14,6 @@ type MatchP struct {
 	Id       int       `json:"Id"`
 	SportId  int       `json:"SportId"`
 	LeagueId int       `json:"LeagueId"`
-	TeamA    []int     `json:"TeamA"`
-	TeamB    []int     `json:"TeamB"`
-	ScoreA   int       `json:"ScoreA"`
-	ScoreB   int       `json:"ScoreB"`
-	Date     time.Time `json:"Date"`
-}
-
-type MatchPV2 struct {
-	Id       int       `json:"Id"`
-	SportId  int       `json:"SportId"`
-	LeagueId int       `json:"LeagueId"`
 	TeamA    []string  `json:"TeamA"`
 	TeamB    []string  `json:"TeamB"`
 	ScoreA   int       `json:"ScoreA"`
