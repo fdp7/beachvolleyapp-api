@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"github.com/fdp7/beachvolleyapp-api/league"
 	"github.com/fdp7/beachvolleyapp-api/match"
 	"log"
 
@@ -64,11 +65,22 @@ func main() {
 	{
 		secured.GET("/:leagueId/:sportId/players", player.GetPlayers)
 		secured.GET("/:leagueId/:sportId/players/:name", player.GetPlayer)
+		secured.GET("/:leagueId/:sportId/players/:name/friendnfoe", player.GetFriendNFoe)
 		secured.GET("/:leagueId/:sportId/players/ranking", player.GetRanking)
-		secured.GET("/:leagueId/:sportId/players/:name/mates", player.GetMates)
-		secured.POST("/:leagueId/:sportId/players/balanceTeams", player.GenerateBalancedTeams)
+		secured.POST("/:leagueId/:sportId/players/balance-teams", player.GenerateBalancedTeams)
+
 		secured.GET("/:leagueId/:sportId/matches", match.GetMatches)
 		secured.POST("/:leagueId/:sportId/match", match.AddMatch)
+		secured.DELETE("/:leagueId/:sportId/match", match.DeleteMatch)
+
+		// TODO
+		secured.POST("/league", league.AddLeague)
+		secured.DELETE("/league/:leagueId", league.DeleteLeague)
+		secured.GET("/league/:leagueId/:name", league.GetUserLeagues)
+		secured.POST("/league/:leagueId/add-user", league.AddUser)
+		secured.POST("/league/:leagueId/delete-user", league.DeleteUser)
+		secured.DELETE("league/:leagueId/abandon-league", league.AbandonLeague)
+
 	}
 
 	router.Run()

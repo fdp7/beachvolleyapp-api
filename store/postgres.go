@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/jackc/pgx/v5"
 	"math"
+	"time"
 )
 
 type PostgresStore struct {
@@ -44,11 +45,12 @@ func (s *PostgresStore) GetUser(ctx context.Context, userName string) ([]byte, e
 
 func (s *PostgresStore) AddUser(ctx context.Context, u *UserP) error {
 
+	// add user
 	query := `INSERT INTO "User" ("Id", "Name", "Password", "Email") VALUES ($u.Name, $u.Password, $u.Email)
 			on conflict ("Name") do nothing
             returning "Id"`
 
-	err := s.client.QueryRow(ctx, query)
+	_, err := s.client.Exec(ctx, query)
 
 	if len(u.Name) < 2 || len(u.Name) >= 11 {
 		return ErrNotValidName
@@ -56,6 +58,7 @@ func (s *PostgresStore) AddUser(ctx context.Context, u *UserP) error {
 	if err != nil {
 		return fmt.Errorf("failed to add user to db: %w", err)
 	}
+
 	return nil
 }
 
@@ -168,8 +171,99 @@ func (s *PostgresStore) GetRanking(ctx context.Context, leagueId string, sportId
 	return json.Marshal(&players)
 }
 
-/*func (s *PostgresStore) GetFriendNFoe(ctx context.Context, leagueId string, sportId string, name string) (*FriendNFoe, error){
-}*/
+func (s *PostgresStore) GetFriendNFoe(ctx context.Context, leagueId string, sportId string, name string) (*FriendNFoe, error) {
+
+	// get all matches for given player
+	var matches []MatchP
+
+	query := `SELECT  m."Id", m."LeagueId", m."SportId", m."TeamA", m."TeamB", m."ScoreA", m."ScoreB", m."Date"
+				 FROM "Match" as m
+				 WHERE m."LeagueId" = $1 and m."SportId" = $2 and ($3 = ANY(m."TeamA") OR $3 = ANY(m."TeamB"))
+				 order by m."Date" asc`
+	rows, err := s.client.Query(ctx, query, leagueId, sportId, name)
+
+	if err != nil {
+		return nil, ErrNoMatchFound
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var match MatchP
+		err := rows.Scan(
+			&match.Id,
+			&match.LeagueId,
+			&match.SportId,
+			&match.TeamA,
+			&match.TeamB,
+			&match.ScoreA,
+			&match.ScoreB,
+			&match.Date,
+		)
+		if err != nil {
+			return nil, ErrNoMatchFound
+		}
+		matches = append(matches, match)
+	}
+
+	if len(matches) == 0 {
+		return nil, ErrNoMatchFound
+	}
+
+	bF, wF := s.getBestFriendAndWorstFoe(matches, name)
+
+	friendNFoe := &FriendNFoe{
+		BestFriend: *bF,
+		WorstFoe:   *wF,
+	}
+	return friendNFoe, nil
+}
+
+func (s *PostgresStore) GenerateBalancedTeams(ctx context.Context, leagueId string, sportId string, players []*PlayerP) ([]string, []string, float64, int, error) {
+
+	// retrieve players stats
+	playersStats := make(map[string]float64)
+
+	for _, p := range players {
+
+		query := `SELECT  u."Id", us."UserId", u."Name", us."LeagueId", us."SportId", us."MatchCount", us."WinCount", us."Elo"
+			 FROM "UserStats" as us
+			 inner join "User" as u on us."UserId" = u."Id"
+			 WHERE us."LeagueId" = $1 and us."SportId" = $2 and u."Name" = $3`
+
+		err := s.client.QueryRow(ctx, query, leagueId, sportId, p.Name).
+			Scan(
+				&p.UserStats.Id,
+				&p.UserStats.UserId,
+				&p.Name,
+				&p.UserStats.LeagueId,
+				&p.UserStats.SportId,
+				&p.UserStats.MatchCount,
+				&p.UserStats.WinCount,
+				&p.UserStats.Elo,
+			)
+
+		if err != nil {
+			return nil, nil, 0, 0, ErrNoPlayerFound
+		}
+
+		// compute RealTimeValue (rtValue)
+		lastElo := p.UserStats.Elo[len(p.UserStats.Elo)-1]
+		rtValue := computeRealTimePlayerValue(lastElo, p.UserStats.Elo, p.UserStats.MatchCount, 3)
+
+		// fill the map with names and rtValues
+		playersStats[p.Name] = rtValue
+	}
+
+	// generate Balanced Teams
+	team1, team2, rtValueDiff, swaps := balanceTeams(playersStats, 1, 10)
+
+	if len(team1)+len(team2) < len(playersStats) {
+		return nil, nil, 0, 0, fmt.Errorf("balance teams generation failed")
+	}
+
+	return team1, team2, rtValueDiff, swaps, nil
+}
 
 func (s *PostgresStore) GetMatches(ctx context.Context, leagueId string, sportId string, name string) ([]byte, error) {
 
@@ -245,6 +339,50 @@ func (s *PostgresStore) AddMatch(ctx context.Context, m *MatchP) error {
 	return nil
 }
 
+func (s *PostgresStore) DeleteMatch(ctx context.Context, leagueId string, sportId string, date time.Time) error {
+
+	match := &MatchP{}
+
+	query := `SELECT  m."Id", m."LeagueId", m."SportId", m."TeamA", m."TeamB", m."ScoreA", m."ScoreB", m."Date"
+			 FROM "Match" as m
+			 WHERE m."LeagueId" = $1 and m."SportId" = $2 and m."Date" = $3`
+
+	err := s.client.QueryRow(ctx, query, leagueId, sportId, date).
+		Scan(
+			&match.Id,
+			&match.LeagueId,
+			&match.SportId,
+			&match.TeamA,
+			&match.TeamB,
+			&match.ScoreA,
+			&match.ScoreB,
+			&match.Date,
+		)
+
+	if err != nil {
+		return ErrNoMatchFound
+	}
+
+	players := append(match.TeamA, match.TeamB...)
+
+	query = `DELETE
+			 FROM "Match" as m
+			 WHERE m."Id" = $1`
+
+	_, err = s.client.Exec(ctx, query, match.Id)
+
+	if err != nil {
+		return fmt.Errorf("failed to delete match (Id = %d) %w", match.Id, err)
+	}
+
+	err = s.updateUserStats(ctx, match, players, true)
+	if err != nil {
+		return fmt.Errorf("failed to update player stats: %w", err)
+	}
+
+	return nil
+}
+
 // update player stats (match_count, win_count, elo) based on played or deleted match
 func (s *PostgresStore) updateUserStats(ctx context.Context, m *MatchP, players []string, onDeletedMatch bool) error {
 
@@ -260,7 +398,7 @@ func (s *PostgresStore) updateUserStats(ctx context.Context, m *MatchP, players 
 	for _, p := range players {
 
 		// get player by name
-		var player *PlayerP
+		player := &PlayerP{}
 
 		query := `SELECT  u."Id", us."UserId", u."Name", us."LeagueId", us."SportId", us."MatchCount", us."WinCount", us."Elo"
 			 FROM "UserStats" as us
@@ -417,4 +555,77 @@ func (s *PostgresStore) computeElo(p *PlayerP, teamARating float64, teamBRating 
 	}
 
 	return p.UserStats.Elo, nil
+}
+
+// find the bestFriend and WorstFoe stats of a given player
+func (s *PostgresStore) getBestFriendAndWorstFoe(matches []MatchP, playerName string) (*Mate, *Mate) {
+	var wonTogether []string
+	var lostAgainst []string
+
+	// for all matches, get all mates won/loss for the given player
+	wonTogether, lostAgainst = s.getMatesStats(matches, playerName, wonTogether, lostAgainst)
+
+	// find bestFriend: the player with whom the player won more matches when playing together
+	bestFriend, matchCountWon := findMaxOccurrences(wonTogether)
+
+	// find worstFoe: the player with whom the player lost more matches when playing against
+	worstFoe, matchCountLost := findMaxOccurrences(lostAgainst)
+
+	// for bestFriend/worstFoe find total number of matches played together/against
+	matchesWithBestFriend := countOccurrences(append(wonTogether, lostAgainst...), bestFriend)
+	matchesWithWorstFriend := countOccurrences(append(wonTogether, lostAgainst...), worstFoe)
+
+	bF := &Mate{
+		Name:              bestFriend,
+		WonLossCount:      matchCountWon,
+		TotalMatchesCount: matchesWithBestFriend,
+	}
+
+	wF := &Mate{
+		Name:              worstFoe,
+		WonLossCount:      matchCountLost,
+		TotalMatchesCount: matchesWithWorstFriend,
+	}
+
+	return bF, wF
+}
+
+// identifies the lists of other players with whom the given player won/lost
+func (s *PostgresStore) getMatesStats(matches []MatchP, playerName string, wonTogether []string, lostAgainst []string) ([]string, []string) {
+	for _, m := range matches {
+		var friends []string
+		var foes []string
+
+		isWinner := false
+		if containsString(m.TeamA, playerName) {
+			// teamA is friend
+			friends = append(friends, m.TeamA...)
+			foes = append(foes, m.TeamB...)
+			if m.ScoreA > m.ScoreB {
+				isWinner = true
+			}
+			if isWinner {
+				wonTogether = append(wonTogether, m.TeamA...)
+			} else {
+				lostAgainst = append(lostAgainst, m.TeamB...)
+			}
+		} else {
+			// teamB is friend
+			friends = append(friends, m.TeamB...)
+			foes = append(foes, m.TeamA...)
+			if m.ScoreB > m.ScoreA {
+				isWinner = true
+			}
+			if isWinner {
+				wonTogether = append(wonTogether, m.TeamB...)
+			} else {
+				lostAgainst = append(lostAgainst, m.TeamA...)
+			}
+		}
+	}
+
+	// remove playerName from wonTogether list
+	wonTogether = removeString(wonTogether, playerName)
+
+	return wonTogether, lostAgainst
 }

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"sort"
 	"strings"
 	"time"
 
@@ -421,7 +420,7 @@ func (s *MongoSportStore) GetMates(ctx context.Context, playerName string, sport
 		return nil, nil, ErrNoMatchFound
 	}
 
-	bF, wF := getBestFriendAndWorstFoe(matches, playerName)
+	bF, wF := s.getBestFriendAndWorstFoe(matches, playerName)
 
 	return bF, wF, nil
 }
@@ -608,7 +607,8 @@ func (s *MongoSportStore) computeElo(p *Player, teamARating float64, teamBRating
 }
 
 // Generate two teams such that : rtValue(team1) - rtValue(team2) =(about) 0
-func balanceTeams(players map[string]float64, teamsValueMaxDifference float64, maxSwaps int) ([]string, []string, float64, int) {
+/*func balanceTeams(players map[string]float64, teamsValueMaxDifference float64, maxSwaps int) ([]string, []string, float64, int) {
+
 	// sort players from higher to lower rtValue
 	keys := make([]string, 0, len(players))
 	for key := range players {
@@ -666,11 +666,11 @@ func balanceTeams(players map[string]float64, teamsValueMaxDifference float64, m
 	}
 
 	return team1, team2, rtValueDiff, swaps
-}
+}*/
 
 // find the higher value for team1 and lower value for team2
 // return the indexes of the players owing such values
-func findPlayersMaxMinValue(team1 []string, team2 []string, players map[string]float64) (int, int) {
+/*func findPlayersMaxMinValue(team1 []string, team2 []string, players map[string]float64) (int, int) {
 	maxIdx := 0
 	minIdx := 0
 	maxValue := players[team1[0]]
@@ -691,11 +691,11 @@ func findPlayersMaxMinValue(team1 []string, team2 []string, players map[string]f
 	}
 
 	return maxIdx, minIdx
-}
+}*/
 
 // compute RealTimeValue for a player considering :
 // last elo, historic avg, latest avg, match played, latest period to analyze
-func computeRealTimePlayerValue(lastElo float64, elo []float64, matchCount int, latestPeriod int) float64 {
+/*func computeRealTimePlayerValue(lastElo float64, elo []float64, matchCount int, latestPeriod int) float64 {
 	var rtValue float64
 	e := make([]float64, latestPeriod) // sub-elo trend to analyze
 
@@ -720,10 +720,10 @@ func computeRealTimePlayerValue(lastElo float64, elo []float64, matchCount int, 
 	}
 
 	return rtValue
-}
+}*/
 
 // compute average of values in a slice
-func computeAvg(n []float64) float64 {
+/*func computeAvg(n []float64) float64 {
 	var sum float64
 	for i := range n {
 		sum = sum + n[i]
@@ -782,15 +782,15 @@ func removeString(list []string, target string) []string {
 	}
 
 	return result
-}
+}*/
 
 // find the bestFriend and WorstFoe stats of a given player
-func getBestFriendAndWorstFoe(matches []Match, playerName string) (*Mate, *Mate) {
+func (s *MongoSportStore) getBestFriendAndWorstFoe(matches []Match, playerName string) (*Mate, *Mate) {
 	var wonTogether []string
 	var lostAgainst []string
 
 	// for all matches, get all mates won/loss for the given player
-	wonTogether, lostAgainst = getMatesStats(matches, playerName, wonTogether, lostAgainst)
+	wonTogether, lostAgainst = s.getMatesStats(matches, playerName, wonTogether, lostAgainst)
 
 	// find bestFriend: the player with whom the player won more matches when playing together
 	bestFriend, matchCountWon := findMaxOccurrences(wonTogether)
@@ -818,7 +818,7 @@ func getBestFriendAndWorstFoe(matches []Match, playerName string) (*Mate, *Mate)
 }
 
 // identifies the lists of other players with whom the given player won/lost
-func getMatesStats(matches []Match, playerName string, wonTogether []string, lostAgainst []string) ([]string, []string) {
+func (s *MongoSportStore) getMatesStats(matches []Match, playerName string, wonTogether []string, lostAgainst []string) ([]string, []string) {
 	for _, m := range matches {
 		var friends []string
 		var foes []string

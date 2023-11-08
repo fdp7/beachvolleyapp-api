@@ -115,8 +115,11 @@ func GetMatches(ctx *gin.Context) {
 }
 
 func DeleteMatch(ctx *gin.Context) {
-	sportStr := ctx.Param("sport")
 
+	leagueId := ctx.Param("leagueId")
+	sportId := ctx.Param("sportId")
+
+	/*sportStr := ctx.Param("sport")
 	sport := store.Sport(sportStr)
 	_, ok := store.EnabledSport[sport]
 	if !ok {
@@ -125,9 +128,9 @@ func DeleteMatch(ctx *gin.Context) {
 		})
 
 		return
-	}
+	}*/
 
-	if store.DBSport == nil {
+	if store.DBSql == nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "store is not initialized",
 		})
@@ -136,14 +139,14 @@ func DeleteMatch(ctx *gin.Context) {
 	}
 
 	matchDate := ctx.Request.URL.Query().Get(matchDateQueryParam)
-	FormattedMatchDate, err := time.Parse(time.RFC3339, matchDate)
+	formattedMatchDate, err := time.Parse(time.RFC3339, matchDate)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "failed to format match date",
 		})
 	}
 
-	err = store.DBSport.DeleteMatch(ctx, FormattedMatchDate, sport)
+	err = store.DBSql.DeleteMatch(ctx, leagueId, sportId, formattedMatchDate)
 	if errors.Is(err, store.ErrNoMatchFound) {
 		ctx.JSON(http.StatusNoContent, gin.H{
 			"message": "no match found",
@@ -170,14 +173,14 @@ func matchToStoreMatch(m *Match) *store.Match {
 	}
 }
 
-func matchToStoreMatchP(leagueId string, sportId string, m *Match) *store.MatchP {
+func matchToStoreMatchP(leagueIdStr string, sportIdStr string, m *Match) *store.MatchP {
 
-	sportIdInt, _ := strconv.Atoi(sportId)
-	leagueIdInt, _ := strconv.Atoi(leagueId)
+	sportId, _ := strconv.Atoi(sportIdStr)
+	leagueId, _ := strconv.Atoi(leagueIdStr)
 
 	return &store.MatchP{
-		SportId:  sportIdInt,
-		LeagueId: leagueIdInt,
+		SportId:  sportId,
+		LeagueId: leagueId,
 		TeamA:    m.TeamA,
 		TeamB:    m.TeamB,
 		ScoreA:   m.ScoreA,

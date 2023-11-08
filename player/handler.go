@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -149,11 +150,13 @@ func GetRanking(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"ranking": players})
 }
 
-func GetMates(ctx *gin.Context) {
+func GetFriendNFoe(ctx *gin.Context) {
 
+	leagueId := ctx.Param("leagueId")
+	sportId := ctx.Param("sportId")
 	name := ctx.Param("name")
 
-	sportStr := ctx.Param("sport")
+	/*sportStr := ctx.Param("sport")
 	sport := store.Sport(sportStr)
 	_, ok := store.EnabledSport[sport]
 	if !ok {
@@ -162,16 +165,16 @@ func GetMates(ctx *gin.Context) {
 		})
 
 		return
-	}
+	}*/
 
-	if store.DBSport == nil {
+	if store.DBSql == nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "store is not initialized",
 		})
 		return
 	}
 
-	bF, wF, err := store.DBSport.GetMates(ctx, name, sport)
+	fnf, err := store.DBSql.GetFriendNFoe(ctx, leagueId, sportId, name)
 	if errors.Is(err, store.ErrNoPlayerFound) {
 		ctx.JSON(http.StatusNotFound, gin.H{
 			"message": "no player found",
@@ -186,14 +189,17 @@ func GetMates(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"bestfriend": bF,
-		"worstfoe":   wF,
+		"bestfriend": fnf.BestFriend,
+		"worstfoe":   fnf.WorstFoe,
 	})
 }
 
 func GenerateBalancedTeams(ctx *gin.Context) {
-	sportStr := ctx.Param("sport")
 
+	leagueId := ctx.Param("leagueId")
+	sportId := ctx.Param("sportId")
+
+	/*sportStr := ctx.Param("sport")
 	sport := store.Sport(sportStr)
 	_, ok := store.EnabledSport[sport]
 	if !ok {
@@ -202,9 +208,9 @@ func GenerateBalancedTeams(ctx *gin.Context) {
 		})
 
 		return
-	}
+	}*/
 
-	if store.DBSport == nil {
+	if store.DBSql == nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{
 			"message": "store is not initialized",
 		})
@@ -225,10 +231,12 @@ func GenerateBalancedTeams(ctx *gin.Context) {
 	}
 
 	playersNames := body.Players
-	var players []Player
+	var players []PlayerP
 
 	for _, playerName := range playersNames {
-		result, err := store.DBSport.GetPlayer(ctx, playerName, sport)
+
+		result, err := store.DBSql.GetPlayer(ctx, leagueId, sportId, playerName)
+
 		if errors.Is(err, store.ErrNoPlayerFound) {
 			ctx.JSON(http.StatusNotFound, gin.H{
 				"message": "no player found",
@@ -237,12 +245,13 @@ func GenerateBalancedTeams(ctx *gin.Context) {
 		}
 		if err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{
-				"message": "can't find player",
+				"message": "failed to get player",
 			})
 			return
 		}
 
-		p := &Player{}
+		p := &PlayerP{}
+
 		if err := json.Unmarshal(result, p); err != nil {
 			ctx.JSON(http.StatusInternalServerError, gin.H{
 				"message": "failed to unmarshal player",
@@ -253,12 +262,13 @@ func GenerateBalancedTeams(ctx *gin.Context) {
 	}
 
 	// turn data into storage type
-	storePlayers := make([]store.Player, len(players))
+	storePlayers := make([]*store.PlayerP, len(players))
+
 	for i, player := range players {
-		storePlayers[i] = playerToStorePlayer(player)
+		storePlayers[i] = playerToStorePlayerP(leagueId, sportId, player)
 	}
 
-	team1, team2, rtValueDiff, swaps, err := store.DBSport.GenerateBalancedTeams(ctx, storePlayers, sport)
+	team1, team2, rtValueDiff, swaps, err := store.DBSql.GenerateBalancedTeams(ctx, leagueId, sportId, storePlayers)
 	if err != nil {
 		ctx.JSON(http.StatusNoContent, gin.H{
 			"message": "failed to generate balanced teams",
@@ -283,5 +293,24 @@ func playerToStorePlayer(p Player) store.Player {
 		WinCount:   p.WinCount,
 		Elo:        p.Elo,
 		LastElo:    p.LastElo,
+	}
+}
+
+func playerToStorePlayerP(leagueIdStr string, sportIdStr string, p PlayerP) *store.PlayerP {
+
+	leagueId, _ := strconv.Atoi(leagueIdStr)
+	sportId, _ := strconv.Atoi(sportIdStr)
+
+	return &store.PlayerP{
+		Name: p.Name,
+		UserStats: store.UserStats{
+			Id:         p.UserStats.Id,
+			UserId:     p.UserStats.UserId,
+			LeagueId:   leagueId,
+			SportId:    sportId,
+			MatchCount: p.UserStats.MatchCount,
+			WinCount:   p.UserStats.WinCount,
+			Elo:        p.UserStats.Elo,
+		},
 	}
 }

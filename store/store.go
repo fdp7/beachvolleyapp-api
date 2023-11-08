@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
+	"sort"
 	"time"
 
 	"github.com/spf13/viper"
@@ -37,11 +39,12 @@ type SqlDbStore interface {
 	GetPlayers(ctx context.Context, leagueId string, sportId string) ([]byte, error)
 	GetPlayer(ctx context.Context, leagueId string, sportId string, name string) ([]byte, error)
 	GetRanking(ctx context.Context, leagueId string, sportId string) ([]byte, error)
-	//GetFriendNFoe(ctx context.Context, leagueId string, sportId string, name string) (*FriendNFoe, error)
-	//GenerateBalancedTeams(ctx context.Context, players []Player, sport Sport) ([]string, []string, float64, int, error)
+	GetFriendNFoe(ctx context.Context, leagueId string, sportId string, name string) (*FriendNFoe, error)
+	GenerateBalancedTeams(ctx context.Context, leagueId string, sportId string, players []*PlayerP) ([]string, []string, float64, int, error)
 
 	GetMatches(ctx context.Context, leagueId string, sportId string, name string) ([]byte, error)
 	AddMatch(ctx context.Context, m *MatchP) error
+	DeleteMatch(ctx context.Context, leagueId string, sportId string, date time.Time) error
 }
 
 type Sport string
@@ -196,4 +199,182 @@ type Mate struct {
 type FriendNFoe struct {
 	BestFriend Mate `json:"bestfriend"`
 	WorstFoe   Mate `json:"worstfoe"`
+}
+
+//---------------------------------------------------------------------- utilities functions
+
+// compute average of values in a slice
+func computeAvg(n []float64) float64 {
+	var sum float64
+	for i := range n {
+		sum = sum + n[i]
+	}
+
+	average := sum / float64(len(n))
+
+	return average
+}
+
+// check if a string is contained in a list
+func containsString(list []string, target string) bool {
+	for _, str := range list {
+		if str == target {
+			return true
+		}
+	}
+	return false
+}
+
+// find the string that has the most occurrences in a list and count them
+func findMaxOccurrences(list []string) (string, int) {
+	maxString := ""
+	maxCount := 0
+
+	for _, str := range list {
+		count := countOccurrences(list, str)
+		if count > maxCount {
+			maxString = str
+			maxCount = count
+		}
+	}
+
+	return maxString, maxCount
+}
+
+// count occurrences of a string in a list
+func countOccurrences(list []string, target string) int {
+	count := 0
+	for _, str := range list {
+		if str == target {
+			count++
+		}
+	}
+	return count
+}
+
+// remove all occurrences of a string from a list
+func removeString(list []string, target string) []string {
+	result := make([]string, 0)
+
+	for _, str := range list {
+		if str != target {
+			result = append(result, str)
+		}
+	}
+
+	return result
+}
+
+// Generate two teams such that : rtValue(team1) - rtValue(team2) =(about) 0
+func balanceTeams(players map[string]float64, teamsValueMaxDifference float64, maxSwaps int) ([]string, []string, float64, int) {
+
+	// sort players from higher to lower rtValue
+	keys := make([]string, 0, len(players))
+	for key := range players {
+		keys = append(keys, key)
+	}
+	sort.SliceStable(keys, func(i, j int) bool {
+		return players[keys[i]] > players[keys[j]]
+	})
+
+	var team1 []string
+	var team2 []string
+	var team1rtValue float64
+	var team2rtValue float64
+
+	// make 2 teams from the sorted list and compute team rtValues
+	for _, key := range keys {
+		playerRtValue := players[key]
+		if team1rtValue <= team2rtValue {
+			team1 = append(team1, key)
+			team1rtValue += playerRtValue
+		} else {
+			team2 = append(team2, key)
+			team2rtValue += playerRtValue
+		}
+	}
+
+	// attempt to swap players to minimize the difference between teams' rtValues until threshold teamsValueMaxDifference or maxSwaps is reached
+	swaps := 0
+	rtValueDiff := math.Abs(team1rtValue - team2rtValue)
+	for rtValueDiff >= teamsValueMaxDifference {
+		if swaps >= maxSwaps {
+			break
+		} else {
+			maxIdx, minIdx := findPlayersMaxMinValue(team1, team2, players)
+
+			player1 := team1[maxIdx]
+			player2 := team2[minIdx]
+
+			team1rtValueNew := team1rtValue - players[player1] + players[player2]
+			team2rtValueNew := team2rtValue + players[player1] - players[player2]
+
+			// if no improvement, that's already the best balance between teams
+			if rtValueDiff < math.Abs(team1rtValueNew-team2rtValueNew) {
+				break
+			} else {
+				// swap players, update team values and their difference
+				team1[maxIdx], team2[minIdx] = player2, player1
+
+				team1rtValue, team2rtValue = team1rtValueNew, team2rtValueNew
+				rtValueDiff = math.Abs(team1rtValue - team2rtValue)
+
+				swaps++
+			}
+		}
+	}
+
+	return team1, team2, rtValueDiff, swaps
+}
+
+// find the higher value for team1 and lower value for team2
+// return the indexes of the players owing such values
+func findPlayersMaxMinValue(team1 []string, team2 []string, players map[string]float64) (int, int) {
+	maxIdx := 0
+	minIdx := 0
+	maxValue := players[team1[0]]
+	minValue := players[team2[0]]
+
+	for i := 1; i < len(team1); i++ {
+		if players[team1[i]] > maxValue {
+			maxValue = players[team1[i]]
+			maxIdx = i
+		}
+	}
+
+	for i := 1; i < len(team2); i++ {
+		if players[team2[i]] < minValue {
+			minValue = players[team2[i]]
+			minIdx = i
+		}
+	}
+
+	return maxIdx, minIdx
+}
+
+func computeRealTimePlayerValue(lastElo float64, elo []float64, matchCount int, latestPeriod int) float64 {
+	var rtValue float64
+	e := make([]float64, latestPeriod) // sub-elo trend to analyze
+
+	if len(elo) > latestPeriod {
+		// starting from second-latest match fill the sub-elo trend
+		for i := 1; i <= latestPeriod; i++ {
+			e[i-1] = elo[len(elo)-1-i]
+		}
+
+		// compute historic and latest elo average
+		totalAvg := computeAvg(elo)
+		latestAvg := computeAvg(e)
+
+		// RealTimeVPlayerValue computed as
+		// last elo
+		// adding bonus/malus based on latest period performance
+		// weighted on number of games played wrt the considered latest period length
+		// such that the higher the matchCount, the higher the confidence in bonus/malus, the higher the bonus/malus incidence in RTV
+		rtValue = lastElo + ((latestAvg - totalAvg) / float64(matchCount/(matchCount-latestPeriod)))
+	} else {
+		rtValue = lastElo
+	}
+
+	return rtValue
 }
