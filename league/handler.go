@@ -12,10 +12,13 @@ const (
 )
 
 /*
-the user that creates the league becomes its first participant automatically
-Maybe should also be made admin and founder with the power to make others admin too.
-An admin can use AddUser and DeleteUser api. Founder (only!!!) can use DeleteLeague api.
-Anyone can abandon the league
+- The user that creates the league becomes its first participant automatically
+- The user that creates the league becomes admin and founder
+- An admin can use AddUser and DeleteUser api
+- Founder only can use DeleteLeague api
+- Founder only can make others admin
+- Anyone can abandon the league, but if the founder abandon the league, then an admin should become founder,
+while if no admin is present, a normal user should be made both founder and admin
 */
 func AddLeague(ctx *gin.Context) {
 
@@ -58,6 +61,10 @@ func GetUserLeagues(ctx *gin.Context) {
 	// Must exploit UserLeague table
 }
 
+func GetLeagueUsers(ctx *gin.Context) {
+	// get all users that are part of the specified league
+}
+
 // delete league if you're the founder
 func DeleteLeague(ctx *gin.Context) {
 	leagueId := ctx.Param("leagueId")
@@ -96,6 +103,12 @@ func AddUser(ctx *gin.Context) {
 
 func DeleteUser(ctx *gin.Context) {
 	// deleting a user from a league should be a soft delete so that if you add it back it will regain all its historical stats
+}
+
+func MakeAdmin(ctx *gin.Context) {
+	// founder can make another user of the league as admin. The user should already be added
+	// as query param there is the username of the one invoking the api (that must be the founder); in the body there
+	// must be the LIST of usernames to be made admin
 }
 
 func leagueToStoreLeagueU(l *League, user string) *store.LeagueU {

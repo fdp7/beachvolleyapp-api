@@ -76,10 +76,12 @@ func main() {
 		// TODO
 		secured.POST("/league", league.AddLeague)
 		secured.DELETE("/league/:leagueId", league.DeleteLeague)
-		secured.GET("/league/:leagueId/:name", league.GetUserLeagues)
+		secured.GET("/league/:leagueId/:username", league.GetUserLeagues)
+		secured.GET("/league/:leagueId", league.GetLeagueUsers)
 		secured.POST("/league/:leagueId/add-user", league.AddUser)
 		secured.POST("/league/:leagueId/delete-user", league.DeleteUser)
 		secured.DELETE("league/:leagueId/abandon-league", league.AbandonLeague)
+		secured.PUT("league/:leagueId/make-admin", league.MakeAdmin)
 
 	}
 
