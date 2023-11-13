@@ -45,6 +45,11 @@ type SqlDbStore interface {
 	GetMatches(ctx context.Context, leagueId string, sportId string, name string) ([]byte, error)
 	AddMatch(ctx context.Context, m *MatchP) error
 	DeleteMatch(ctx context.Context, leagueId string, sportId string, date time.Time) error
+
+	AddLeague(ctx context.Context, l *LeagueU) error
+	DeleteLeague(ctx context.Context, leagueId string) error
+	IsFounder(ctx context.Context, userName string, leagueId string) (error, bool)
+	IsAdmin(ctx context.Context, userName string, leagueId string) (error, bool)
 }
 
 type Sport string
@@ -72,6 +77,7 @@ var (
 	ErrNoPlayerFound    = errors.New("no player found")
 	ErrPlayerDuplicated = errors.New("player already registered")
 	ErrNoMatchFound     = errors.New("no match found")
+	ErrNoLeagueFound    = errors.New("no league found")
 )
 
 type StoreType int
@@ -199,6 +205,12 @@ type Mate struct {
 type FriendNFoe struct {
 	BestFriend Mate `json:"bestfriend"`
 	WorstFoe   Mate `json:"worstfoe"`
+}
+
+type LeagueU struct {
+	Id   int    `json:"Id"`
+	Name string `json:"Name"`
+	User string `json:"User"`
 }
 
 //---------------------------------------------------------------------- utilities functions
