@@ -48,8 +48,11 @@ type SqlDbStore interface {
 
 	AddLeague(ctx context.Context, l *LeagueU) error
 	DeleteLeague(ctx context.Context, leagueId string) error
-	IsFounder(ctx context.Context, userName string, leagueId string) (error, bool)
-	IsAdmin(ctx context.Context, userName string, leagueId string) (error, bool)
+	IsFounder(ctx context.Context, userName string, leagueId string) (bool, error)
+	IsAdmin(ctx context.Context, userName string, leagueId string) (bool, error)
+	AbandonLeague(ctx context.Context, userName string, leagueId string) error
+	AddUserToLeague(ctx context.Context, userToAdd string, leagueId string) error
+	RemoveUserFromLeague(ctx context.Context, userToRemove string, leagueId string) error
 }
 
 type Sport string
@@ -78,6 +81,7 @@ var (
 	ErrPlayerDuplicated = errors.New("player already registered")
 	ErrNoMatchFound     = errors.New("no match found")
 	ErrNoLeagueFound    = errors.New("no league found")
+	ErrNoSportFound     = errors.New("no sport found")
 )
 
 type StoreType int

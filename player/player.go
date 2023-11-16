@@ -20,6 +20,6 @@ type UserStats struct {
 }
 
 type PlayerP struct {
-	Name      string `json:"Name"`
-	UserStats UserStats
+	Name      string    `json:"Name"`
+	UserStats UserStats `json:"UserStats"`
 }

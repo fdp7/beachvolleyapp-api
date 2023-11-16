@@ -675,36 +675,162 @@ func (s *PostgresStore) AddLeague(ctx context.Context, l *LeagueU) error {
 	return nil
 }
 
-// delete league and all user leagues for its users
+// delete everything about league
 func (s *PostgresStore) DeleteLeague(ctx context.Context, leagueId string) error {
 
-	// delete all userleagues for given league
-	query := `delete
-				from "UserLeague" as ul
-				where ul."LeagueId" = $1`
-
-	_, err := s.client.Exec(ctx, query, leagueId)
+	err := s.DeleteAllForLeague(ctx, leagueId)
 
 	if err != nil {
-		return fmt.Errorf("failed to delete userleague: %w", err)
-	}
-
-	// delete given league
-	query = `delete
-				from "League" as l
-				where l."Id" = $1`
-
-	_, err = s.client.Exec(ctx, query, leagueId)
-
-	if err != nil {
-		return fmt.Errorf("failed to delete league: %w", err)
+		return fmt.Errorf("failed to delete everything about league %s: %w", leagueId, err)
 	}
 
 	return nil
 }
 
+// userName abandons specified league and all its related data are deleted
+func (s *PostgresStore) AbandonLeague(ctx context.Context, userName string, leagueId string) error {
+
+	// get userId
+	userId, err := s.GetUserId(ctx, userName)
+	if err != nil {
+		return err
+	}
+
+	// assign necessary new role to another user in league
+	if isFounder, _ := s.IsFounder(ctx, userName, leagueId); isFounder == true {
+		// check if there is at least one admin, otherwise make one randomly
+		var adminCount int
+
+		query := `SELECT count("Id") FROM "UserLeague" where "IsAdmin" = true and "LeagueId" = $1`
+
+		err = s.client.QueryRow(ctx, query, leagueId).
+			Scan(
+				&adminCount,
+			)
+
+		if err != nil {
+			return fmt.Errorf("failed to get admin users from league %s: %w", leagueId, err)
+		}
+
+		// take a random admin to make founder
+		if adminCount > 0 {
+			query = `update "UserLeague" set "IsFounder" = true
+                    where "IsAdmin" = true and "LeagueId" = $1
+					order by random() limit 1`
+
+		} else {
+			query = `update "UserLeague" set "IsAdmin" = true, "IsFounder" = true
+                    where "LeagueId" = $1
+					order by random() limit 1`
+		}
+
+		_, err = s.client.Exec(ctx, query, leagueId)
+
+		if err != nil {
+			return fmt.Errorf("failed to assign new roles in league %s: %w", leagueId, err)
+		}
+	}
+
+	// delete user from league
+	query := `delete from "UserLeague" where "UserId" and "LeagueId" = $2`
+
+	_, err = s.client.Exec(ctx, query, userId, leagueId)
+
+	if err != nil {
+		return fmt.Errorf("failed to delete user %s from league %s: %w", userId, leagueId, err)
+	}
+
+	/* not sure if I want to delete the stats
+	// delete user stats for specified league
+	query = `delete from "UserStats" as us where us."UserId" and us."LeagueId" = $2`
+
+	_, err = s.client.Exec(ctx, query, userId, leagueId)
+
+	if err != nil {
+		return fmt.Errorf("failed to delete user %s stats in league %s: %w", userId, leagueId, err)
+	}*/
+
+	// if no one is left in the league, delete the league and all the related matches and user stats
+	var userCount int
+
+	query = `SELECT count("Id") FROM "UserLeague" where "LeagueId" = $1`
+
+	err = s.client.QueryRow(ctx, query, leagueId).
+		Scan(
+			&userCount,
+		)
+
+	if err != nil {
+		return fmt.Errorf("failed to get users from league %s: %w", leagueId, err)
+	}
+
+	if userCount == 0 {
+		err = s.DeleteAllForLeague(ctx, leagueId)
+		if err != nil {
+			return fmt.Errorf("failed to delete everything for league %s: %w", leagueId, err)
+		}
+	}
+
+	return nil
+}
+
+func (s *PostgresStore) GetUserId(ctx context.Context, userName string) (int, error) {
+	var userId int
+
+	query := `SELECT "Id" FROM "User" where "Name" = $1`
+
+	err := s.client.QueryRow(ctx, query, userName).
+		Scan(
+			&userId,
+		)
+
+	if err != nil {
+		return 0, fmt.Errorf("failed to get user %s: %w", userName, err)
+	}
+	return userId, nil
+}
+
+func (s *PostgresStore) DeleteAllForLeague(ctx context.Context, leagueId string) error {
+	// delete league
+	query := `delete from "League" where "LeagueId" = $1`
+
+	_, err := s.client.Exec(ctx, query, leagueId)
+
+	if err != nil {
+		return fmt.Errorf("failed to delete league %s: %w", leagueId, err)
+	}
+
+	// delete users league
+	query = `delete from "UserLeague" where "LeagueId" = $1`
+
+	_, err = s.client.Exec(ctx, query, leagueId)
+
+	if err != nil {
+		return fmt.Errorf("failed to delete users from league %s: %w", leagueId, err)
+	}
+
+	// delete matches
+	query = `delete from "Match" where "LeagueId" = $1`
+
+	_, err = s.client.Exec(ctx, query, leagueId)
+
+	if err != nil {
+		return fmt.Errorf("failed to delete matches for league %s: %w", leagueId, err)
+	}
+
+	// delete user stats
+	query = `delete from "UserStats" where "LeagueId" = $1`
+
+	_, err = s.client.Exec(ctx, query, leagueId)
+
+	if err != nil {
+		return fmt.Errorf("failed to delete users stats for league %s: %w", leagueId, err)
+	}
+	return nil
+}
+
 // check if user is founder
-func (s *PostgresStore) IsFounder(ctx context.Context, userName string, leagueId string) (error, bool) {
+func (s *PostgresStore) IsFounder(ctx context.Context, userName string, leagueId string) (bool, error) {
 
 	var userId int
 
@@ -720,14 +846,14 @@ func (s *PostgresStore) IsFounder(ctx context.Context, userName string, leagueId
 		)
 
 	if err != nil {
-		return fmt.Errorf("failed to get user: %w", err), false
+		return false, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	return nil, true
+	return true, nil
 }
 
 // check if user is admin
-func (s *PostgresStore) IsAdmin(ctx context.Context, userName string, leagueId string) (error, bool) {
+func (s *PostgresStore) IsAdmin(ctx context.Context, userName string, leagueId string) (bool, error) {
 
 	var userId int
 
@@ -743,8 +869,75 @@ func (s *PostgresStore) IsAdmin(ctx context.Context, userName string, leagueId s
 		)
 
 	if err != nil {
-		return fmt.Errorf("failed to get user: %w", err), false
+		return false, fmt.Errorf("failed to get user: %w", err)
 	}
 
-	return nil, true
+	return true, nil
+}
+
+func (s *PostgresStore) AddUserToLeague(ctx context.Context, userToAdd string, leagueId string) error {
+
+	// get user id
+	userId, err := s.GetUserId(ctx, userToAdd)
+	if err != nil {
+		return err
+	}
+
+	// add user to league
+	query := `INSERT INTO "UserLeague" ("UserId", "LeagueId", "IsFounder", "IsAdmin")
+				VALUES ($1, $2, false, false)`
+
+	_, err = s.client.Exec(ctx, query, userId, leagueId)
+
+	if err != nil {
+		return fmt.Errorf("failed to add user %s to league %s: %w", userToAdd, leagueId, err)
+	}
+
+	// get all sport ids
+	var sportIds []int
+
+	query = `SELECT  "Id" FROM "Sport"`
+
+	rows, err := s.client.Query(ctx, query)
+
+	if err != nil {
+		return ErrNoSportFound
+	}
+
+	defer rows.Close()
+
+	for rows.Next() {
+		var sportId int
+		err = rows.Scan(
+			&sportId,
+		)
+		if err != nil {
+			return ErrNoSportFound
+		}
+		sportIds = append(sportIds, sportId)
+	}
+
+	// add user stats for the specified league for all sports
+	query = `INSERT INTO "UserStats" ("UserId", "LeagueId", "SportId", "MatchCount", "WinCount", "Elo")
+				SELECT
+					$1 AS "UserId",
+					$2 AS "LeagueId",
+					sport_id AS "SportId",
+					0 AS "MatchCount",
+					0 AS "WinCount",
+					ARRAY[0] AS "Elo"
+				FROM
+					UNNEST($3::integer[]) AS sport_id;`
+
+	_, err = s.client.Exec(ctx, query, userId, leagueId, sportIds)
+
+	if err != nil {
+		return fmt.Errorf("failed to add user %s to league %s: %w", userToAdd, leagueId, err)
+	}
+
+	return nil
+}
+
+func (s *PostgresStore) RemoveUserFromLeague(ctx context.Context, userToRemove string, leagueId string) error {
+	return nil
 }
