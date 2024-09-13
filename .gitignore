@@ -16,4 +16,4 @@
 .idea
 
 # Environment Variables
-app.env
+cmd/app.env

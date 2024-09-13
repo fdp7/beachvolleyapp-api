@@ -36,12 +36,14 @@ const (
 	Beachvolley Sport = "beachvolley"
 	Basket      Sport = "basket"
 	Pool        Sport = "pool"
+	Padel       Sport = "padel"
 )
 
 var EnabledSport = map[Sport]struct{}{
 	Beachvolley: {},
 	Basket:      {},
 	Pool:        {},
+	Padel:       {},
 }
 
 var DBUser UserStore
