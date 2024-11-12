@@ -17,3 +17,6 @@
 
 # Environment Variables
 cmd/app.env
+
+# Debugging
+launch.json

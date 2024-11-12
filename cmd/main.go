@@ -33,6 +33,7 @@ func main() {
 
 	router.POST("/user/signup", user.RegisterUser)
 	router.POST("/user/login", auth.GenerateToken)
+	router.GET("/ping", auth.Ping)
 
 	// in secured all api that must be checked using a valid token
 	secured := router.Use(auth.Auth())
