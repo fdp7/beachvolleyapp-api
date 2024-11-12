@@ -156,3 +156,7 @@ func Auth() gin.HandlerFunc {
 		ctx.Next()
 	}
 }
+
+func Ping(ctx *gin.Context) {
+	ctx.JSON(http.StatusOK, gin.H{"message": "pong"})
+}
